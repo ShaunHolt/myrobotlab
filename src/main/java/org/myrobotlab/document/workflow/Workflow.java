@@ -52,7 +52,7 @@ public class Workflow {
   private void initializeWorkerThread(int threadNum) {
     WorkflowWorker worker = null;
     try {
-      worker = new WorkflowWorker(workflowConfig, queue);
+      worker = new WorkflowWorker(workflowConfig, queue, Integer.toString(threadNum));
     } catch (ClassNotFoundException e) {
       // TODO: better handling?
       log.warn("Error starting the worker thread. {}", e.getLocalizedMessage());
@@ -114,7 +114,7 @@ public class Workflow {
         break;
       }
       try {
-        System.out.println("Workers are still running...");
+        log.info("Workers are still running...");
         Thread.sleep(1000);
       } catch (InterruptedException e) {
         // TODO Auto-generated catch block

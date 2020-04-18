@@ -1,12 +1,12 @@
 
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -14,7 +14,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -30,14 +30,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
+import org.myrobotlab.joystick.Component;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.math.Mapper;
-import org.myrobotlab.sensor.Encoder;
+import org.myrobotlab.math.MapperLinear;
+import org.myrobotlab.math.interfaces.Mapper;
+import org.myrobotlab.sensor.EncoderData;
 import org.myrobotlab.sensor.EncoderListener;
-import org.myrobotlab.service.Joystick.Component;
+import org.myrobotlab.sensor.EncoderPublisher;
 import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.data.JoystickData;
 import org.myrobotlab.service.data.PinData;
@@ -52,22 +54,21 @@ import org.slf4j.Logger;
 
 /**
  * @author GroG
- * 
- *         represents a common continuous direct current electric motor. The
- *         motor will need a MotorController which can be one of many different
- *         types of electronics. A simple H-bridge typically has 2 bits which
- *         control the motor. A direction bit which changes the polarity of the
- *         H-bridges output
+ *
+ *         AbstractMotor - this class contains all the data necessary for
+ *         MotorController to run a motor. Functions of the MotorController are
+ *         proxied through this class, with itself as a parameter
  * 
  */
 
-// extends Service implements MotorControl, EncoderListener
 abstract public class AbstractMotor extends Service implements MotorControl, EncoderListener, PinListener {
 
   private static final long serialVersionUID = 1L;
 
   public final static Logger log = LoggerFactory.getLogger(AbstractMotor.class);
 
+  // my motor controller - TODO support multiple controllers ??? would virtual
+  // benefit ?
   protected transient MotorController controller = null;
   /**
    * list of names of possible controllers
@@ -75,27 +76,25 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
   public List<String> controllers;
 
   boolean locked = false;
-  
-  Mapper inputMapper;
 
   /**
    * the power level requested - varies between -1.0 &lt;--&gt; 1.0
    */
 
-  double powerLevel = 0;
-  double maxPower = 1.0;
-  double minPower = -1.0;
+  // FIXME - check to see if these are necessary PROBABLY NOT SINCE THE MAPPER
+  // PARTS ARE NOW PART OF CONTROLLER
 
-  // grog: THIS SHOULD ONLY BE USED FOR INVERTED AND INPUT LIMITS !!!!
-  // SHOULD NOT BE USED FOR RANGE MAPPING - RANGE MAPPING SHOULD ONLY BE
-  // IN MOTORCONTROLLER !!!
-  Mapper powerMap = new Mapper(-1.0, 1.0, -1.0, 1.0);
+  // inputs
+  Double powerInput = 0.0;
+  Double positionInput; // aka targetPos
 
-  // position
-  double currentPos = 0;
-  double targetPos = 0;
+  // feedback
+  Double positionCurrent; // aka currentPos
 
-  Mapper encoderMap = new Mapper(-800.0, 800.0, -800.0, 800.0);
+  /**
+   * a new "un-set" mapper for merging with default motorcontroller
+   */
+  transient Mapper mapper = new MapperLinear();
 
   transient MotorEncoder encoder = null;
 
@@ -106,12 +105,21 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
 
   String controllerName;
 
-  public AbstractMotor(String n) {
-    super(n);
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
+  Double min = null;
+
+  Double max = null;
+
+  public AbstractMotor(String n, String id) {
+    super(n, id);
+    subscribeToRuntime("registered");
+    // "top" half of the mapper is set by the control
+    // so that we "try" to maintain a standard default of -1.0 <=> 1.0 with same
+    // input limits
+    // "bottom" half of the mapper will be set by the controller
+    mapper.map(-1.0, 1.0, null, null);
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
   }
@@ -125,34 +133,11 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
     return controller;
   }
 
+  // FIXME - repair input/output
   @Override
   public double getPowerLevel() {
-    return powerLevel;
+    return powerInput;
   }
-  
-  
-  /*
-
-  // FIXME - remove !!! - no need or desire to map inside controller !
-  @Override
-  public double getPowerOutput() {
-    return powerMap.calcOutput(powerLevel);
-  }
-
-  
-  // FIXME - remove !!! - no need or desire to map inside controller !
-  public Mapper getPowerMap() {
-    return powerMap;
-  }
-  
-  // FIXME - remove !!! - no need or desire to map inside controller !
-  public void mapPower(double minX, double maxX, double minY, double maxY) {
-    powerMap = new Mapper(minX, maxX, minY, maxY);
-    broadcastState();
-  }
-  
-  */
-  
 
   @Override
   public boolean isAttached(MotorController controller) {
@@ -161,94 +146,57 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
 
   @Override
   public boolean isInverted() {
-    return powerMap.isInverted();
+    return mapper.isInverted();
   }
 
   @Override
   public void lock() {
-    // log.info("lock");
+    info("%s.lock", getName());
     locked = true;
-  }
-
-  public void mapEncoder(double minX, double maxX, double minY, double maxY) {
-    encoderMap = new Mapper(minX, maxX, minY, maxY);
     broadcastState();
   }
 
-  
   @Override
-  // not relative ! - see moveStep
   public void move(double powerInput) {
-    double power = powerMap.calcOutput(powerInput);
-    // info("%s.move(%.3f)", getName(), power);
-        
-    if (Math.abs(power) > maxPower) {
-      warn("motor %s.move(%.3f) out of range - must be between -1.0 and 1.0", getName(), power);
-      return;
-    }
-
-    powerLevel = power;
-
-    if (locked) {
-      warn("motor locked");
-      return;
-    }
-    controller.motorMove(this);
+    info("%s.move(%.2f)", getName(), powerInput);
+    this.powerInput = powerInput;
+    if (controller != null)
+      controller.motorMove(this);
     broadcastState();
-  }
-
-  @Override
-  public void moveTo(double newPos, Double powerLevel) {
-    this.powerLevel = powerLevel;
-    if (controller == null) {
-      error(String.format("%s's controller is not set", getName()));
-      return;
-    }
-
-    // targetPos = encoderMap.calc(newPos);
-    targetPos = newPos;
-    controller.motorMoveTo(this);
-    broadcastState();
-  }
-
-  @Override
-  public void moveTo(double newPos) {
-    moveTo(newPos, null);
   }
 
   @Override
   public void setInverted(boolean invert) {
-    powerMap.setInverted(invert);
-    // controller.motorMove(this); - motor should not be 
-    // told to move for setting
-    // inverted
+    mapper.setInverted(invert);
     broadcastState();
   }
 
   // ---- Servo begin ---------
   public void setMinMax(double min, double max) {
-    powerMap.setMin(min);
-    powerMap.setMax(max);
+    this.min = min;
+    this.max = max;
     broadcastState();
   }
 
-  public void setPowerLevel(double power) {
-    powerLevel = power;
+  public void map(double minX, double maxX, double minY, double maxY) {
+    mapper.map(minX, maxX, minY, maxY);
+    broadcastState();
   }
 
   @Override
   public void stop() {
     // log.info("{}.stop()", getName());
-    powerLevel = 0.0;
+    powerInput = 0.0;
     if (controller != null) {
       controller.motorStop(this);
     }
     broadcastState();
   }
 
+  // FIXME - proxy to MotorControllerx
   @Override
   public void stopAndLock() {
-    // log.info("stopAndLock");
+    info("stopAndLock");
     move(0.0);
     lock();
     broadcastState();
@@ -256,7 +204,7 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
 
   @Override
   public void unlock() {
-    // log.info("unLock");
+    info("unLock");
     locked = false;
     broadcastState();
   }
@@ -265,7 +213,7 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
   public boolean isLocked() {
     return locked;
   }
-  
+
   @Override
   public void stopService() {
     super.stopService();
@@ -275,24 +223,29 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
   }
 
   // FIXME - related to update(SensorData) no ?
-  public Integer updatePosition(Integer position) {
-    currentPos = position;
+  public int updatePosition(int position) {
+    positionCurrent = (double) position;
+    return position;
+  }
+
+  public double updatePosition(double position) {
+    positionCurrent = position;
     return position;
   }
 
   @Override
   public double getTargetPos() {
-    return targetPos;
+    return positionInput;
   }
 
   @Override
-  public void pulse() {
+  public void onEncoderData(EncoderData data) {
     // TODO Auto-generated method stub
 
   }
 
   @Override
-  public void setEncoder(Encoder encoder) {
+  public void setEncoder(EncoderPublisher encoder) {
     // TODO Auto-generated method stub
 
   }
@@ -309,55 +262,55 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
     if (MotorController.class.isAssignableFrom(service.getClass())) {
       attachMotorController((MotorController) service);
       return;
-    } 
+    }
 
     error("%s doesn't know how to attach a %s", getClass().getSimpleName(), service.getClass().getSimpleName());
   }
-  
-  public void onPin(PinData data){
+
+  // hmm
+  public void onPin(PinData data) {
     Double pwr = null;
-    if (inputMapper != null){
-      pwr = inputMapper.calcOutput(data.value);
-    } else{
-      pwr = data.value.doubleValue();
-    }
+
+    pwr = data.value.doubleValue();
+
     move(pwr);
   }
-  
-  public void onJoystickData(JoystickData data){
+
+  // hmm
+  public void onJoystickData(JoystickData data) {
+    // info("AbstractMotor onJoystickData - %f", data.value);
     Double pwr = null;
-    if (inputMapper != null){
-      pwr = inputMapper.calcOutput(data.value);
-    } else{
-      pwr = data.value.doubleValue();
-    }
+    pwr = data.value.doubleValue();
     move(pwr);
   }
-  
+
   //////////////// begin new stuff ///////////////////////
 
-  public void attach(PinDefinition pindef){
+  public void attach(PinDefinition pindef) {
     // SINGLE PIN MAN !! not ALL PINS !
-    // must be local now :P 
+    // must be local now :P
     // FIXME this "should" be cable of adding vi
     // e.g send(pindef.getName(), "attach", getName(), pindef.getAddress());
     // attach(pindef.getName(), pindef.getAddress)
-    PinArrayControl pac = (PinArrayControl)Runtime.getService(pindef.getName());
+    PinArrayControl pac = (PinArrayControl) Runtime.getService(pindef.getName());
     pac.attach(this, pindef.getAddress());
     // subscribe(pindef.getName(), "publishPin", getName(), "move");
   }
-  
-  public void attach(Component joystickComponent){
+
+  public void attach(Component joystickComponent) {
+    if (joystickComponent == null) {
+      error("cannot attach a null joystick component", getName());
+      return;
+    }
     send(joystickComponent.getName(), "addListener", getName(), joystickComponent.id);
   }
-  
-  public void attach(ButtonDefinition buttondef){
+
+  public void attach(ButtonDefinition buttondef) {
     subscribe(buttondef.getName(), "publishButton", getName(), "move");
   }
 
-  
   //////////////// end new stuff ///////////////////////
-  
+
   @Override
   public void attachMotorController(MotorController controller) throws Exception {
     if (controller == null) {
@@ -371,6 +324,7 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
 
     this.controller = controller;
     this.controllerName = controller.getName();
+    this.mapper.merge(controller.getDefaultMapper());
 
     broadcastState();
     controller.attach(this);
@@ -407,4 +361,18 @@ abstract public class AbstractMotor extends Service implements MotorControl, Enc
     return ret;
   }
 
+  // FIXME promote to interface
+  public Mapper getMapper() {
+    return mapper;
+  }
+
+  // FIXME promote to interface
+  public void setMapper(Mapper mapper) {
+    this.mapper = mapper;
+  }
+
+  // FIXME promot to interface
+  public double calcControllerOutput() {
+    return mapper.calcOutput(getPowerLevel());
+  }
 }

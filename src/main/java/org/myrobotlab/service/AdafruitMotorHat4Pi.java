@@ -13,19 +13,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.math.Mapper;
+import org.myrobotlab.service.abstracts.AbstractMotorController;
 import org.myrobotlab.service.interfaces.I2CControl;
 import org.myrobotlab.service.interfaces.I2CController;
 import org.myrobotlab.service.interfaces.MotorControl;
-import org.myrobotlab.service.RasPi;
-import org.myrobotlab.service.abstracts.AbstractMotorController;
 import org.slf4j.Logger;
 
 /**
@@ -70,11 +67,11 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   // 1
   // register
   public static final byte PCA9685_SLEEP = 0x10; // Set sleep mode before
-                                                 // changing prescale value
+  // changing prescale value
   public static final byte PCA9685_AUTOINCREMENT = 0x20; // Set autoincrement to
-                                                         // be able to write
-                                                         // more than one byte
-                                                         // in sequence
+  // be able to write
+  // more than one byte
+  // in sequence
 
   public static final byte PCA9685_PRESCALE = (byte) 0xFE; // PreScale register
 
@@ -86,14 +83,14 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   public static final int PCA9685_LED0_OFF_H = 0x08; // First LED addressHigh
 
   public static final int PCA9685_ALL_LED_OFF_H = 0xFD; // All call i2c address
-                                                        // ( Used for shutdown
-                                                        // of all pwm )
+  // ( Used for shutdown
+  // of all pwm )
   public static final int PCA9685_TURN_ALL_LED_OFF = 0x10; // Command to turn
-                                                           // all LED off stop
-                                                           // pwm )
+  // all LED off stop
+  // pwm )
 
   public static final float osc_clock = 25000000; // clock frequency of the
-                                                  // internal clock
+  // internal clock
   public static final float precision = 4096; // pwm_precision
 
   // i2c controller
@@ -123,10 +120,9 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   public static void main(String[] args) {
 
     try {
-      LoggingFactory.getInstance().configure();
-      LoggingFactory.getInstance().setLevel(Level.DEBUG);
+      LoggingFactory.init();
 
-      SwingGui swing = (SwingGui) Runtime.start("gui", "SwingGui");
+      Runtime.start("gui", "SwingGui");
       RasPi raspi = (RasPi) Runtime.start("raspi", "RasPi");
       AdafruitMotorHat4Pi hat = (AdafruitMotorHat4Pi) Runtime.start("hat", "AdafruitMotorHat4Pi");
       hat.attach(raspi, "1", "0x60");
@@ -148,14 +144,14 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
     }
   }
 
-  public AdafruitMotorHat4Pi(String n) {
-    super(n);
+  public AdafruitMotorHat4Pi(String n, String id) {
+    super(n, id);
     refreshControllers();
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
-    powerMapper = new Mapper(-1.0, 1.0, -1.0, 1.0);
+    subscribeToRuntime("registered");
+    map(-1.0, 1.0, -1.0, 1.0);
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
   }
@@ -183,7 +179,8 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
 
     byte[] buffer = { (byte) (PCA9685_LED0_ON_L + (pin * 4)), (byte) (pulseWidthOn & 0xff), (byte) (pulseWidthOn >> 8), (byte) (pulseWidthOff & 0xff),
         (byte) (pulseWidthOff >> 8) };
-    // log.info(String.format("Writing pin %s, pulesWidthOn %s, pulseWidthOff %s", pin, pulseWidthOn, pulseWidthOff));
+    // log.info(String.format("Writing pin %s, pulesWidthOn %s, pulseWidthOff
+    // %s", pin, pulseWidthOn, pulseWidthOff));
     controller.i2cWrite(this, Integer.parseInt(deviceBus), Integer.decode(deviceAddress), buffer, buffer.length);
   }
 
@@ -197,11 +194,11 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
     float prescale_value;
 
     if (hz < minPwmFreq) {
-      log.error(String.format("Minimum PWMFreq is %s Hz, requested freqency is %s Hz, clamping to minimum", minPwmFreq, hz));
+      log.error("Minimum PWMFreq is {} Hz, requested freqency is {} Hz, clamping to minimum", minPwmFreq, hz);
       hz = minPwmFreq;
       prescale_value = 255;
     } else if (hz > maxPwmFreq) {
-      log.error(String.format("Maximum PWMFreq is %s Hz, requested frequency is %s Hz, clamping to maximum", maxPwmFreq, hz));
+      log.error("Maximum PWMFreq is {} Hz, requested frequency is {} Hz, clamping to maximum", maxPwmFreq, hz);
       hz = maxPwmFreq;
       prescale_value = 3;
     } else {
@@ -211,7 +208,8 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
       prescale_value = Math.round(0.9 * osc_clock / precision / hz) - 1;
     }
 
-    // log.info(String.format("PWMFreq %s hz, prescale_value calculated to %s", hz, prescale_value));
+    // log.info(String.format("PWMFreq %s hz, prescale_value calculated to %s",
+    // hz, prescale_value));
     // Set sleep mode before changing PWM freqency
     byte[] writeBuffer = { PCA9685_MODE1, PCA9685_SLEEP };
     controller.i2cWrite(this, Integer.parseInt(deviceBus), Integer.decode(deviceAddress), writeBuffer, writeBuffer.length);
@@ -254,7 +252,8 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   public void stopPwm() {
 
     byte[] buffer = { (byte) (PCA9685_ALL_LED_OFF_H), (byte) PCA9685_TURN_ALL_LED_OFF };
-    // log.info(String.format("Writing shutdown command to %s", this.getName()));
+    // log.info(String.format("Writing shutdown command to %s",
+    // this.getName()));
     controller.i2cWrite(this, Integer.parseInt(deviceBus), Integer.decode(deviceAddress), buffer, buffer.length);
   }
 
@@ -267,7 +266,7 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
 
     Class<?> type = mc.getClass();
 
-    double powerOutput = powerMapper.calcOutput(mc.getPowerLevel ());
+    double powerOutput = motorCalcOutput(mc);
     // log.info(String.format("powerOutput = %.3f", powerOutput));
 
     // Clamp powerOutput between -1 and 1
@@ -283,7 +282,8 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
         motor.setPwmFreq(defaultMotorPwmFreq);
         setPWMFreq(motor.getPwmPin(), motor.getPwmFreq());
       }
-      // log.info(String.format("AdafruitMotorHat4Pi, powerOutput = %s", powerOutput));
+      // log.info(String.format("AdafruitMotorHat4Pi, powerOutput = %s",
+      // powerOutput));
       if (powerOutput < 0) {
         setPinValue(motor.getLeftDirPin(), 0);
         setPinValue(motor.getRightDirPin(), 1);
@@ -301,12 +301,13 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   }
 
   public void setPinValue(int pin, double powerOutput) {
-    // log.info(String.format("setPinValue, pin = %s, powerOutput = %s", pin, powerOutput));
+    // log.info(String.format("setPinValue, pin = %s, powerOutput = %s", pin,
+    // powerOutput));
     if (powerOutput < 0) {
-      log.error(String.format("setPinValue. Value below zero (%s). Defaulting to 0.", powerOutput));
+      log.error("setPinValue. Value below zero ({}). Defaulting to 0.", powerOutput);
       powerOutput = 0;
     } else if (powerOutput > 1) {
-      log.error(String.format("setPinValue. Value > 1 (%s). Defaulting to 1", powerOutput));
+      log.error("setPinValue. Value > 1 ({}). Defaulting to 1", powerOutput);
       powerOutput = 1;
     }
 
@@ -323,7 +324,8 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
       powerOn = 0;
       powerOff = (int) (powerOutput * 4096);
     }
-    // log.info(String.format("powerOutput = %s, powerOn = %s, powerOff = %s", powerOutput, powerOn, powerOff));
+    // log.info(String.format("powerOutput = %s, powerOn = %s, powerOff = %s",
+    // powerOutput, powerOn, powerOff));
     setPWM(pin, powerOn, powerOff);
   }
 
@@ -407,7 +409,7 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   @Override
   public void setDeviceBus(String deviceBus) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceBus = deviceBus;
@@ -417,7 +419,7 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   @Override
   public void setDeviceAddress(String deviceAddress) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceAddress = deviceAddress;
@@ -451,11 +453,11 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
   public void attach(I2CController controller, String deviceBus, String deviceAddress) {
 
     if (isAttached && this.controller != controller) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
     }
 
     controllerName = controller.getName();
-    log.info(String.format("%s attach %s", getName(), controllerName));
+    log.info("{} attach {}", getName(), controllerName);
 
     this.deviceBus = deviceBus;
     this.deviceAddress = deviceAddress;
@@ -471,14 +473,14 @@ public class AdafruitMotorHat4Pi extends AbstractMotorController implements I2CC
       return;
 
     if (this.controllerName != controller.getName()) {
-      log.error(String.format("Trying to attached to %s, but already attached to (%s)", controller.getName(), this.controllerName));
+      log.error("Trying to attached to {}, but already attached to ({})", controller.getName(), this.controllerName);
       return;
     }
 
     this.controller = controller;
     isAttached = true;
     controller.attachI2CControl(this);
-    log.info(String.format("Attached %s device on bus: %s address %s", controllerName, deviceBus, deviceAddress));
+    log.info("Attached {} device on bus: {} address {}", controllerName, deviceBus, deviceAddress);
     broadcastState();
   }
 

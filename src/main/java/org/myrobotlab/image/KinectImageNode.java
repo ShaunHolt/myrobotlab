@@ -1,15 +1,15 @@
 package org.myrobotlab.image;
 
-import static org.bytedeco.javacpp.opencv_core.cvResetImageROI;
-import static org.bytedeco.javacpp.opencv_core.cvSetImageROI;
+import static org.bytedeco.opencv.global.opencv_core.cvResetImageROI;
+import static org.bytedeco.opencv.global.opencv_core.cvSetImageROI;
 
 import java.awt.Rectangle;
 import java.io.Serializable;
 import java.util.Date;
 
-import org.bytedeco.javacpp.opencv_core.CvRect;
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.myrobotlab.service.Vision;
+import org.bytedeco.opencv.opencv_core.CvRect;
+import org.bytedeco.opencv.opencv_core.IplImage;
+import org.myrobotlab.service.OpenCV;
 
 public class KinectImageNode implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -34,8 +34,8 @@ public class KinectImageNode implements Serializable {
   public int lastGoodFitIndex = 0;
 
   public void convertToSerializableTypes() {
-    cameraFrame = new SerializableImage(Vision.IplImageToBufferedImage(cvCameraFrame), "camera");
-    mask = new SerializableImage(Vision.IplImageToBufferedImage(cvMask), "frame");
+    cameraFrame = new SerializableImage(OpenCV.toBufferedImage(cvCameraFrame), "camera");
+    mask = new SerializableImage(OpenCV.toBufferedImage(cvMask), "frame");
   }
 
   public IplImage getTemplate() {

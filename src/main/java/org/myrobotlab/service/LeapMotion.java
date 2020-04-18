@@ -30,12 +30,12 @@ public class LeapMotion extends Service implements LeapDataListener, LeapDataPub
 
   transient LeapMotionListener listener = null;
 
-  transient Controller controller = new Controller();
+  transient Controller controller = null;
 
   public LeapData lastLeapData = null;
 
-  public LeapMotion(String n) {
-    super(n);
+  public LeapMotion(String n, String id) {
+    super(n, id);
   }
 
   public void activateDefaultMode() {
@@ -148,6 +148,7 @@ public class LeapMotion extends Service implements LeapDataListener, LeapDataPub
   public void startService() {
     super.startService();
     listener = new LeapMotionListener(this);
+    controller = new Controller();
     // we've been asked to start.. we should start tracking !
     this.startTracking();
   }
@@ -164,7 +165,7 @@ public class LeapMotion extends Service implements LeapDataListener, LeapDataPub
     LoggingFactory.init(Level.INFO);
     try {
 
-      LeapMotion leap = new LeapMotion("leap");
+      LeapMotion leap =  (LeapMotion) Runtime.start("leap", "LeapMotion");
       leap.startService();
       Runtime.start("gui", "SwingGui");
       Runtime.start("webgui", "WebGui");
@@ -208,8 +209,18 @@ public class LeapMotion extends Service implements LeapDataListener, LeapDataPub
 
     ServiceType meta = new ServiceType(LeapMotion.class.getCanonicalName());
     meta.addDescription("Leap Motion Service");
-    meta.addCategory("sensor", "telerobotics");
+    meta.addCategory("sensors", "telerobotics");
     meta.addDependency("leapmotion", "leap", "2.1.3");
+
+    // TODO: These will overwrite each other!  we need to be selective for the platform of what we deploy.
+    // I believe the 32bit libraries would overwrite the 64bit libraries. 
+    // meta.addDependency("leapmotion", "leap-linux32", "2.1.3", "zip");
+    // meta.addDependency("leapmotion", "leap-win32", "2.1.3", "zip");
+    // 64 bit support only for now.  until we can switch out dependencies based on the current platform.
+    meta.addDependency("leapmotion", "leap-win64", "2.1.3", "zip");
+    meta.addDependency("leapmotion", "leap-mac64", "2.1.3", "zip");
+    meta.addDependency("leapmotion", "leap-linux64", "2.1.3", "zip");
+    
     return meta;
   }
 

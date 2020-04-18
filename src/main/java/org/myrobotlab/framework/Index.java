@@ -13,14 +13,9 @@ import org.slf4j.Logger;
 
 public class Index<T> {
 
-  // private static final long serialVersionUID = 1L;
-  // used only for serialization load & store
-  // private static Properties properties;
   public final static Logger log = LoggerFactory.getLogger(IndexNode.class);
 
   private IndexNode<T> root = new IndexNode<T>();
-
-  // private static int valueCount = 0;
 
   public static void main(String[] args) throws IOException {
     LoggingFactory.init(Level.DEBUG);
@@ -196,6 +191,54 @@ public class Index<T> {
     return root.getNode(key);
   }
 
+  /**
+   * find a node key, by browsing the whole tree.. ( wanted to use
+   * crawlForDataStartingWith but seem nok )
+   * 
+   * @param parent - parent node key
+   * @param key - this key
+   * @return - result node found
+   */
+  public String findNode(String parent, String key) {
+
+    Set<String> childs = null;
+    if (parent == null) {
+      childs = getRootNode().getBranches().keySet();
+    } else {
+      if (getNode(parent) != null) {
+        childs = getNode(parent).getBranches().keySet();
+      } else {
+        return null;
+      }
+    }
+
+    for (String entrie : childs) {
+      String nextNode = "";
+      if (!(parent == null)) {
+        nextNode = parent + "." + entrie;
+      } else {
+        nextNode = entrie;
+      }
+
+      // log.info(key + " key " + nextNode);
+      if (nextNode.toLowerCase().contains(key.toLowerCase())) {
+        return nextNode;
+      }
+      String nodeIterated = findNode(nextNode, key);
+      if (nodeIterated != null) {
+        return nodeIterated;
+      }
+
+    }
+
+    return null;
+
+  }
+
+  public String findNode(String key) {
+    return findNode(null, key);
+  }
+
   public IndexNode<T> getOrCreateNode(String key) {
     IndexNode<T> node = getNode(key);
     if (node == null) {
@@ -207,6 +250,31 @@ public class Index<T> {
 
   public IndexNode<T> getRootNode() {
     return root;
+  }
+
+  /**
+   * check if selected node have leafs and return them as key list
+   * @param node - node to get leafs from
+   * @return all leaves
+   */
+  public ArrayList<String> getLeafs(String node) {
+
+    ArrayList<String> leafs = new ArrayList<String>();
+    log.debug("getNodeLeafs for {}", node);
+    if (root.getNode(node) != null) {
+
+      Set<String> entries = root.getNode(node).getBranches().keySet();
+      // log.info(entries+"entries");
+
+      for (String key : entries) {
+        if (!(root.getNode(node + "." + key) == null) && root.getNode(node + "." + key).size() == 0) {
+
+          leafs.add(node + "." + key);
+        }
+
+      }
+    }
+    return leafs;
   }
 
   public Enumeration<String> propertyNames() {

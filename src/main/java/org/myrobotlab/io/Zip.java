@@ -4,6 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,11 +12,14 @@ import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
+import org.myrobotlab.image.Util;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
@@ -51,16 +55,16 @@ public class Zip {
 
     }
 
-    log.debug(String.format("extract (%s, %s, %s, %s, %b)", resourcePath, targetDirectory, filter, resourceType, overwrite));
+    log.debug("extract ({}, {}, {}, {}, {})", resourcePath, targetDirectory, filter, resourceType, overwrite);
 
     // String filter = "resource/";
     InputStream source = null;
 
     if (FILE.equals(resourceType)) {
       File check = new File(resourcePath);
-      if (!check.exists() || check.isDirectory()){
-    	  log.error("cannot extract self [{}]", resourcePath);
-    	  return;
+      if (!check.exists() || check.isDirectory()) {
+        log.error("cannot extract self [{}]", resourcePath);
+        return;
       }
       source = new FileInputStream(resourcePath);
     } else {
@@ -83,7 +87,7 @@ public class Zip {
 
         if (filter == null || entry.getName().startsWith(filter)) {
 
-          String filename = (filter==null)?entry.getName():entry.getName().substring(filter.length());
+          String filename = (filter == null) ? entry.getName() : entry.getName().substring(filter.length());
           // File file = new File(target, entry.getName());
           File file = new File(target, filename);
 
@@ -152,7 +156,7 @@ public class Zip {
     if (dir.charAt(dir.length() - 1) != '/') {
       dir = dir + "/";
     }
-    log.info(String.format("listing %s directory %s", zipFile, dir));
+    log.info("listing {} directory {}", zipFile, dir);
     // int BUFFER = 2048;
     File file = new File(zipFile);
     ArrayList<String> children = new ArrayList<String>();
@@ -161,14 +165,14 @@ public class Zip {
     // String newPath = zipFile.substring(0, zipFile.length() - 4);
     ZipEntry zipDir = zip.getEntry(dir);
     if (zipDir == null) {
-      log.error(String.format("%s not found", dir));
+      log.error("{} not found", dir);
       // don't leak file handles.
       zip.close();
       return children;
     }
 
     if (!zipDir.isDirectory()) {
-      log.error(String.format("%s not a directory", dir));
+      log.error("{} not a directory", dir);
       // don't leak file handles.
       zip.close();
       return children;
@@ -187,7 +191,7 @@ public class Zip {
         if (rest.length() > 0) {
           // not subfiles of sub directories
           if ((!(rest.contains("/") && rest.charAt(rest.length() - 1) != '/')) &&
-              // and not sub directories of sub directories
+          // and not sub directories of sub directories
               (countOccurrences(rest, '/') < 2)) {
             // log.info(currentEntry);
             children.add(currentEntry.substring(dir.length()));
@@ -207,7 +211,7 @@ public class Zip {
 
     LoggingFactory.init(Level.INFO);
 
-    ArrayList<String> files = listDirectoryContents("myrobotlab.jar", "resource/Python/");
+    ArrayList<String> files = listDirectoryContents("myrobotlab.jar", Util.getResourceDir() + "/Python/");
     for (int i = 0; i < files.size(); ++i) {
       log.info(files.get(i));
     }
@@ -215,7 +219,7 @@ public class Zip {
   }
 
   static public void unzip(String zipFile, String newPath) throws ZipException, IOException {
-    log.info(String.format("unzipping %s to %s", zipFile, newPath));
+    log.info("unzipping {} to {}", zipFile, newPath);
     int BUFFER = 2048;
     File file = new File(zipFile);
 
@@ -266,15 +270,58 @@ public class Zip {
     zip.close();
   }
 
-  // public static void main(String[] args) throws ZipException, IOException {
-  // // TODO Auto-generated method stub
-  // // extractFolder("ziptest.zip");
-  // Log.init();
-  // // extractFromResource("/resource/ziptest.zip", "binx");
-  // // extractFromFile("./VivaClient.jar", "binx", "resource/");
-  // extractFromSelf("/resource", "binz");
-  // log.debug("done");
-  //
-  // }
+  static public void zip(String[] files, String destZipFile) throws FileNotFoundException, IOException {
+    List<File> listFiles = new ArrayList<File>();
+    for (int i = 0; i < files.length; i++) {
+      listFiles.add(new File(files[i]));
+    }
+    zip(listFiles, destZipFile);
+  }
+
+  static public void zip(List<File> listFiles, String destZipFile) throws FileNotFoundException, IOException {
+    ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(destZipFile));
+    for (File file : listFiles) {
+      if (file.isDirectory()) {
+        zipDirectory(file, file.getName(), zos);
+      } else {
+        zipFile(file, zos);
+      }
+    }
+    zos.flush();
+    zos.close();
+  }
+
+  static public void zipDirectory(File folder, String parentFolder, ZipOutputStream zos) throws FileNotFoundException, IOException {
+    for (File file : folder.listFiles()) {
+      if (file.isDirectory()) {
+        zipDirectory(file, parentFolder + "/" + file.getName(), zos);
+        continue;
+      }
+      zos.putNextEntry(new ZipEntry(parentFolder + "/" + file.getName()));
+      BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
+      long bytesRead = 0;
+      byte[] bytesIn = new byte[BUFFER_SIZE];
+      int read = 0;
+      while ((read = bis.read(bytesIn)) != -1) {
+        zos.write(bytesIn, 0, read);
+        bytesRead += read;
+      }
+      zos.closeEntry();
+    }
+  }
+
+  static public void zipFile(File file, ZipOutputStream zos) throws FileNotFoundException, IOException {
+    zos.putNextEntry(new ZipEntry(file.getName()));
+    BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
+    long bytesRead = 0;
+    byte[] bytesIn = new byte[BUFFER_SIZE];
+    int read = 0;
+    while ((read = bis.read(bytesIn)) != -1) {
+      zos.write(bytesIn, 0, read);
+      bytesRead += read;
+    }
+    zos.closeEntry();
+  }
+
 
 }

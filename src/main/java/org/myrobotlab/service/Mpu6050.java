@@ -29,10 +29,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
@@ -542,7 +542,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
   }
 
   public static void main(String[] args) {
-    LoggingFactory.getInstance().configure();
+    LoggingFactory.init("info");
 
     try {
 
@@ -562,20 +562,20 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
        */
       int[] buffer = new int[] { (int) 0xff, (int) 0xd0 };
       int a = (byte) buffer[0] << 8 | buffer[1] & 0xff;
-      log.info(String.format("0xffd0 should be -48 is = %s", a));
+      log.info("0xffd0 should be -48 is = {}", a);
 
     } catch (Exception e) {
       Logging.logError(e);
     }
   }
 
-  public Mpu6050(String n) {
-    super(n);
+  public Mpu6050(String n, String id) {
+    super(n, id);
     refreshControllers();
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
+    subscribeToRuntime("registered");
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
 
@@ -589,7 +589,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
   @Override
   public void setDeviceBus(String deviceBus) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceBus = deviceBus;
@@ -599,7 +599,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
   @Override
   public void setDeviceAddress(String deviceAddress) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceAddress = deviceAddress;
@@ -710,16 +710,16 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
 
     // check OTP bank valid
     log.info("Reading OTP bank valid flag...");
-    log.info(String.format("OTP bank is %b", getOTPBankValid()));
+    log.info("OTP bank is {}", getOTPBankValid());
 
     // get X/Y/Z gyro offsets
     log.info("Reading gyro offset TC values...");
     int xgOffsetTC = getXGyroOffsetTC();
     int ygOffsetTC = getYGyroOffsetTC();
     int zgOffsetTC = getZGyroOffsetTC();
-    log.info(String.format("X gyro offset = %s", xgOffsetTC));
-    log.info(String.format("Y gyro offset = %s", ygOffsetTC));
-    log.info(String.format("Z gyro offset = %S", zgOffsetTC));
+    log.info("X gyro offset = {}", xgOffsetTC);
+    log.info("Y gyro offset = {}", ygOffsetTC);
+    log.info("Z gyro offset = {}", zgOffsetTC);
 
     // setup weird slave stuff (?)
     log.info("Setting slave 0 address to 0x7F...");
@@ -733,12 +733,12 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
     delay(20);
 
     // load DMP code into memory banks
-    log.info(String.format("Writing DMP code to MPU memory banks (%s) bytes", dmpMemory.length));
+    log.info("Writing DMP code to MPU memory banks ({}) bytes", dmpMemory.length);
     if (writeProgMemoryBlock(dmpMemory, dmpMemory.length)) {
       log.info("Success! DMP code written and verified.");
 
       // write DMP configuration
-      log.info(String.format("Writing DMP configuration to MPU memory banks (%s bytes in config def)", dmpConfig.length));
+      log.info("Writing DMP configuration to MPU memory banks ({} bytes in config def)", dmpConfig.length);
       if (writeProgDMPConfigurationSet(dmpConfig, dmpConfig.length)) {
         log.info("Success! DMP configuration written and verified.");
 
@@ -790,7 +790,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
         int fifoCount = getFIFOCount();
         int[] fifoBuffer = new int[128];
 
-        log.info(String.format("Current FIFO count=%s", fifoCount));
+        log.info("Current FIFO count={}", fifoCount);
         getFIFOBytes(fifoBuffer, fifoCount);
 
         log.info("Setting motion detection threshold to 2...");
@@ -836,7 +836,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
         while ((fifoCount = getFIFOCount()) < 3)
           ;
 
-        log.info(String.format("Current FIFO count=%s", fifoCount));
+        log.info("Current FIFO count={}", fifoCount);
 
         log.info("Reading FIFO data...");
         getFIFOBytes(fifoBuffer, fifoCount);
@@ -858,7 +858,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
         while ((fifoCount = getFIFOCount()) < 3)
           ;
 
-        log.info(String.format("Current FIFO count=%s", fifoCount));
+        log.info("Current FIFO count={}", fifoCount);
 
         log.info("Reading FIFO data...");
         getFIFOBytes(fifoBuffer, fifoCount);
@@ -4407,17 +4407,17 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
 
       // make sure we don't go past the data size
       if (i + chunkSize > dataSize) {
-        log.info(String.format("i + chunkSize > dataSize: i=%s, chunkSize=%s, dataSize=%s", i, chunkSize, dataSize));
+        log.info("i + chunkSize > dataSize: i={}, chunkSize={}, dataSize={}", i, chunkSize, dataSize);
         chunkSize = dataSize - i;
-        log.info(String.format("New chunkSize=%s", chunkSize));
+        log.info("New chunkSize={}", chunkSize);
       }
 
       // make sure this chunk doesn't go past the bank boundary (256
       // bytes)
       if (chunkSize > (256 - address)) {
-        log.info(String.format("chunkSize > 256 - address. chunkSize=%s, address =%s", chunkSize, address));
+        log.info("chunkSize > 256 - address. chunkSize={}, address ={}", chunkSize, address);
         chunkSize = 256 - address;
-        log.info(String.format("New chunkSize=%s", chunkSize));
+        log.info("New chunkSize={}", chunkSize);
       }
 
       // write the chunk of data as specified
@@ -4427,7 +4427,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
         progBuffer[j] = data[i + j];
       }
 
-      log.info(String.format("writeMemoryBlock: Block start: %s, ChunkSize %s", i, chunkSize));
+      log.info("writeMemoryBlock: Block start: {}, ChunkSize {}", i, chunkSize);
       I2CdevWriteBytes(Integer.decode(deviceAddress), MPU6050_RA_MEM_R_W, chunkSize, progBuffer);
 
       // verify data if needed
@@ -4882,7 +4882,7 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
 
     ServiceType meta = new ServiceType(Mpu6050.class.getCanonicalName());
     meta.addDescription("General MPU-6050 acclerometer and gyro");
-    meta.addCategory("microcontroller", "sensor");
+    meta.addCategory("microcontroller", "sensors");
     meta.setSponsor("Mats");
     return meta;
   }
@@ -4946,11 +4946,11 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
   public void attach(I2CController controller, String deviceBus, String deviceAddress) {
 
     if (isAttached && this.controller != controller) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
     }
 
     controllerName = controller.getName();
-    log.info(String.format("%s attach %s", getName(), controllerName));
+    log.info("{} attach {}", getName(), controllerName);
 
     this.deviceBus = deviceBus;
     this.deviceAddress = deviceAddress;
@@ -4966,14 +4966,14 @@ public class Mpu6050 extends Service implements I2CControl, OrientationPublisher
       return;
 
     if (this.controllerName != controller.getName()) {
-      log.error(String.format("Trying to attached to %s, but already attached to (%s)", controller.getName(), this.controllerName));
+      log.error("Trying to attached to {}, but already attached to ({})", controller.getName(), this.controllerName);
       return;
     }
 
     this.controller = controller;
     isAttached = true;
     controller.attachI2CControl(this);
-    log.info(String.format("Attached %s device on bus: %s address %s", controllerName, deviceBus, deviceAddress));
+    log.info("Attached {} device on bus: {} address {}", controllerName, deviceBus, deviceAddress);
     broadcastState();
   }
 

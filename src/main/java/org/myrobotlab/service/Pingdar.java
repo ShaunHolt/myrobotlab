@@ -5,8 +5,11 @@ import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
+import org.myrobotlab.sensor.EncoderData;
+import org.myrobotlab.sensor.EncoderListener;
 import org.myrobotlab.service.interfaces.RangeListener;
 import org.myrobotlab.service.interfaces.RangingControl;
+import org.myrobotlab.service.interfaces.ServoData;
 import org.slf4j.Logger;
 
 /**
@@ -15,7 +18,7 @@ import org.slf4j.Logger;
  * module. The result is a sonar style range finding.
  *
  */
-public class Pingdar extends Service implements RangingControl, RangeListener {
+public class Pingdar extends Service implements RangingControl, RangeListener, EncoderListener {
 
   public static class Point {
 
@@ -33,13 +36,13 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
 
   public final static Logger log = LoggerFactory.getLogger(Pingdar.class);
 
-  public int sweepMin = 0;
-  public int sweepMax = 180;
+  public double sweepMin = 0;
+  public double sweepMax = 180;
 
   public int step = 1;
   transient private Servo servo;
   transient private UltrasonicSensor sensor;
-  
+
   // TODO - changed to XDar - make RangeSensor interface -> publishRange
   // TODO - set default sample rate
   // private boolean isAttached = false;
@@ -51,8 +54,8 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
 
   // long rangeAvg = 0;
 
-  public Pingdar(String n) {
-    super(n);
+  public Pingdar(String n, String id) {
+    super(n, id);
   }
 
   // ----------- interface begin ----------------
@@ -62,7 +65,7 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
     this.servo = servo;
 
     sensor.addRangeListener(this);
-    servo.addServoEventListener(this);
+    // servo.addServoEventListener(this); FIXME - this needs to be addEncoderListener !
     // from the Arduino and send it back in on packet ..
     return true;
   }
@@ -85,23 +88,18 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
     invoke("publishPingdar", new Point(lastPos, range));
     lastRange = range;
   }
+  
+  /**FIXME - this needs to be onEncoderData
 
   public Double onServoEvent(Double pos) {
     info("pos %d", pos.intValue());
-    /*
-    lastPos = pos;
-    if (rangeCount > 0) {
-      Point p = new Point(lastPos, rangeAvg / rangeCount);
-      rangeAvg = 0;
-      rangeCount = 0;
-      invoke("publishPingdar", p);
-    }
-    */
+    
 
     invoke("publishPingdar", new Point(pos, lastRange));
     lastPos = pos;
     return lastPos;
   }
+  */
 
   public Point publishPingdar(Point point) {
     return point;
@@ -122,7 +120,8 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
     sweep(sweepMin, sweepMax);
   }
 
-  public void sweep(int sweepMin, int sweepMax) {
+  public void sweep(double sweepMin, double sweepMax) {
+    try {
     this.sweepMin = sweepMin;
     this.sweepMax = sweepMax;
     this.step = 1;
@@ -132,15 +131,18 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
     servo = getServo();
 
     sensor.addRangeListener(this);
-    servo.addServoEventListener(this);
+    servo.attach((EncoderListener)this);
 
     // servo.setSpeed(60);
-    servo.setVelocity(30);
-    servo.eventsEnabled(true);
-    
+    servo.setSpeed(30.0);
+    // servo.eventsEnabled(true);
+
     sensor.startRanging();
     // STEP ???
-    servo.sweep(sweepMin, sweepMax, 100, step);
+    servo.sweep(sweepMin, sweepMax, 15.0);
+    } catch(Exception e) {
+      error(e);
+    }
   }
 
   /**
@@ -155,22 +157,23 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
 
     ServiceType meta = new ServiceType(Pingdar.class.getCanonicalName());
     meta.addDescription("used as a ultra sonic radar");
-    meta.addCategory("sensor", "display");
+    meta.addCategory("sensors", "display");
     // put peer definitions in
     meta.addPeer("controller", "Arduino", "controller for servo and sensor");
-    meta.addPeer("sensor", "UltrasonicSensor", "sensor");
+    meta.addPeer("sensors", "UltrasonicSensor", "sensors");
     meta.addPeer("servo", "Servo", "servo");
-    
+
     meta.sharePeer("sensor.controller", "controller", "Arduino", "shared arduino");
     // theoretically - Servo should follow the same share config
-    // meta.sharePeer("servo.controller", "controller", "Arduino", "shared arduino");
+    // meta.sharePeer("servo.controller", "controller", "Arduino", "shared
+    // arduino");
 
     return meta;
   }
 
   @Override
   public void startRanging() {
-    if (sensor != null){
+    if (sensor != null) {
       sensor.startRanging();
     } else {
       error("null sensor");
@@ -179,23 +182,22 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
 
   @Override
   public void stopRanging() {
-    if (sensor != null){
+    if (sensor != null) {
       sensor.stopRanging();
     } else {
       error("null sensor");
-    } 
+    }
   }
-  
 
   public static void main(String[] args) {
     try {
       LoggingFactory.init(Level.INFO);
 
       Runtime.start("gui", "SwingGui");
-      
-      VirtualArduino virtual = (VirtualArduino)Runtime.start("virtual","VirtualArduino");
-      Servo servo = (Servo)Runtime.start("servo","Servo");
-      UltrasonicSensor sr04 = (UltrasonicSensor)Runtime.start("sr04", "UltrasonicSensor");
+
+      VirtualArduino virtual = (VirtualArduino) Runtime.start("virtual", "VirtualArduino");
+      Servo servo = (Servo) Runtime.start("servo", "Servo");
+      UltrasonicSensor sr04 = (UltrasonicSensor) Runtime.start("sr04", "UltrasonicSensor");
       sleep(1000);
       virtual.connect("COM5");
       Arduino arduino = (Arduino) Runtime.start("arduino", "Arduino");
@@ -224,6 +226,13 @@ public class Pingdar extends Service implements RangingControl, RangeListener {
   @Override
   public void setUnitInches() {
     sensor.setUnitInches();
+  }
+
+
+  @Override
+  public void onEncoderData(EncoderData data) {
+    // TODO Auto-generated method stub
+    
   }
 
 }

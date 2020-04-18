@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -59,8 +59,8 @@ public class JFugue extends Service {
     jfugue.play("C5maj7w");
   }
 
-  public JFugue(String n) {
-    super(n);
+  public JFugue(String n, String id) {
+    super(n, id);
   }
 
   public void play(Integer i) { // play tone
@@ -103,12 +103,10 @@ public class JFugue extends Service {
 
     ServiceType meta = new ServiceType(JFugue.class.getCanonicalName());
     meta.addDescription("service wrapping Jfugue, used for music and sound generation");
-    meta.addCategory("sound");
+    meta.addCategory("sound","music");
     // org="jfugue" name="jfugue" rev="5.0.7
     meta.addDependency("jfugue", "jfugue", "5.0.7");
     return meta;
   }
-
-
 
 }

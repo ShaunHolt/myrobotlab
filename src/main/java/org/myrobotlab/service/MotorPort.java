@@ -4,14 +4,13 @@ import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.service.abstracts.AbstractMotor;
 
 /**
- * Motor - MotorController which uses a "Port".  
- * Examples are Adafruit Motor Controller which uses ports
- * M1 M2 M3 M4
- * Sabertooth has M1 &amp; M2 ports.
+ * Motor - MotorController which uses a "Port". Examples are Adafruit Motor
+ * Controller which uses ports M1 M2 M3 M4 Sabertooth has M1 &amp; M2 ports.
+ * 
  * @author GroG
  * 
- * Some ports are labeled by numbers some by string values,
- * since a string value can handle either we use a String port.
+ *         Some ports are labeled by numbers some by string values, since a
+ *         string value can handle either we use a String port.
  *
  */
 public class MotorPort extends AbstractMotor {
@@ -19,18 +18,18 @@ public class MotorPort extends AbstractMotor {
 
   String port;
 
-  public MotorPort(String n) {
-    super(n);
+  public MotorPort(String n, String id) {
+    super(n, id);
   }
 
   public void setPort(String port) {
     this.port = port;
   }
-  
+
   public String getPort() {
     return port;
   }
- 
+
   static public ServiceType getMetaData() {
 
     ServiceType meta = new ServiceType(MotorPort.class.getCanonicalName());
@@ -39,5 +38,5 @@ public class MotorPort extends AbstractMotor {
     meta.setAvailable(true);
     return meta;
   }
-  
+
 }

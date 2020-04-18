@@ -1,8 +1,10 @@
 package org.myrobotlab.document.transformer;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.myrobotlab.document.Document;
 
+@Ignore
 public class XPathExtractorTest extends AbstractStageTest {
 
   @Override
@@ -29,7 +31,6 @@ public class XPathExtractorTest extends AbstractStageTest {
   public void validate(Document doc) {
     System.out.println(doc);
     Assert.assertEquals(doc.getField("title").get(0).toString(), "baz");
-
   }
 
 }

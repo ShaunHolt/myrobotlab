@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -83,7 +83,7 @@ public class TrackingGui extends ServiceGui {
     display.add(video0.getDisplay(), BorderLayout.CENTER);
     display.add(p, BorderLayout.EAST);
     display.add(status, BorderLayout.SOUTH);
-  
+
   }
 
   @Override
@@ -117,7 +117,7 @@ public class TrackingGui extends ServiceGui {
       public void run() {
 
         cnt.setText(String.format("%d ", tracker.cnt));
-        latency.setText(String.format("%d ms", tracker.latency));
+        // latency.setText(String.format("%d ms", tracker.latency));
       }
     });
   }

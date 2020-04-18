@@ -22,8 +22,8 @@ public class DocumentPipeline extends Service implements DocumentListener, Docum
   private transient WorkflowServer workflowServer;
   private String workflowName = "default";
 
-  public DocumentPipeline(String reservedKey) {
-    super(reservedKey);
+  public DocumentPipeline(String n, String id) {
+    super(n, id);
   }
 
   static public String[] getCategories() {
@@ -77,6 +77,7 @@ public class DocumentPipeline extends Service implements DocumentListener, Docum
   }
 
   public void flush() {
+
     while (getInbox().size() > 0) {
       // TODO: we've gotta wait until we've consumed our inbox if we're
       // flushing?
@@ -92,6 +93,8 @@ public class DocumentPipeline extends Service implements DocumentListener, Docum
       }
     }
 
+    log.info("Inbox size is {}", getInbox().size());
+    log.info("outbox size is {}", getOutbox().size());
     workflowServer.flush(workflowName);
     // TODO: what if our inbox isn't empty?
 
@@ -181,14 +184,18 @@ public class DocumentPipeline extends Service implements DocumentListener, Docum
    * 
    */
   static public ServiceType getMetaData() {
-
     ServiceType meta = new ServiceType(DocumentPipeline.class.getCanonicalName());
     meta.addDescription("This service will pass a document through a document processing pipeline made up of transformers");
     meta.addCategory("ingest");
-    
-    meta.addDependency("org.apache.tika", "tika-core", "1.14");
+    meta.addDependency("org.apache.tika", "tika-core", "1.22");
     meta.addDependency("org.apache.opennlp", "opennlp-tools", "1.6.0");
     meta.addDependency("net.objecthunter", "exp4j", "0.4.8");
+    // for parsing wikitext
+    meta.addDependency("org.sweble.wikitext", "swc-engine", "3.1.7");
+    meta.addDependency("org.sweble.wom3", "sweble-wom3-core", "3.1.7");
+
+    meta.addDependency("com.thoughtworks.xstream", "xstream", "1.4.9");
+
     // FIXME - add service page, python script, give example of how to use
     meta.setAvailable(false);
     return meta;

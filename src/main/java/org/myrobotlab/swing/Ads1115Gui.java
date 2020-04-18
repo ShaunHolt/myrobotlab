@@ -5,7 +5,7 @@
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -71,7 +71,9 @@ public class Ads1115Gui extends ServiceGui implements ActionListener {
     super(boundServiceName, myService);
     boundService = (Ads1115) Runtime.getService(boundServiceName);
 
-    // addTopLine(controllerLabel, controllerList, deviceBusLabel, deviceBusList, deviceAddressLabel, deviceAddressList, attachButton);
+    // addTopLine(controllerLabel, controllerList, deviceBusLabel,
+    // deviceBusList, deviceAddressLabel, deviceAddressList,
+    // attachButton);
     addTopLine(createFlowPanel("input", attachButton, "Controller", controllerList, "Bus", deviceBusList, "Address", deviceAddressList, refresh));
 
     JPanel center = new JPanel();
@@ -105,16 +107,16 @@ public class Ads1115Gui extends ServiceGui implements ActionListener {
       if (attachButton.getText().equals(attach)) {
         int index = controllerList.getSelectedIndex();
         if (index != -1) {
-          myService.send(boundServiceName, attach, controllerList.getSelectedItem(), deviceBusList.getSelectedItem(), deviceAddressList.getSelectedItem());
+          swingGui.send(boundServiceName, attach, controllerList.getSelectedItem(), deviceBusList.getSelectedItem(), deviceAddressList.getSelectedItem());
         }
       } else {
-        log.info(String.format("detach %s", controllerList.getSelectedItem()));
-        myService.send(boundServiceName, detach, controllerList.getSelectedItem());
+        log.info("detach {}", controllerList.getSelectedItem());
+        swingGui.send(boundServiceName, detach, controllerList.getSelectedItem());
       }
     }
     if (o == refresh) {
       // FIXME !! replace with PortGui
-      myService.send(boundServiceName, "refresh");
+      swingGui.send(boundServiceName, "refresh");
     }
   }
 

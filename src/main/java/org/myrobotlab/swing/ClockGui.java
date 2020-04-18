@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -47,9 +47,9 @@ public class ClockGui extends ServiceGui implements ActionListener {
   String displayFormat = "<html><p style=\"font-size:15px\">%s</p></html>";
   DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
   JTextField interval = new JTextField("1000", 8);
- 
+
   public ClockGui(final String boundServiceName, final SwingGui myService) {
-    super(boundServiceName, myService);  
+    super(boundServiceName, myService);
     addTop(3, clockDisplay);
     addTop(startClock, interval, "ms");
     clockDisplay.setText(String.format(displayFormat, dateFormat.format(new Date())));
@@ -62,17 +62,17 @@ public class ClockGui extends ServiceGui implements ActionListener {
 
     if (o == startClock) {
       if (startClock.getText().compareTo("start clock") == 0) {
-        myService.send(boundServiceName, "setInterval", Integer.parseInt(interval.getText()));
-        myService.send(boundServiceName, "startClock");
+        swingGui.send(boundServiceName, "setInterval", Integer.parseInt(interval.getText()));
+        swingGui.send(boundServiceName, "startClock");
       } else {
-        myService.send(boundServiceName, "stopClock");
+        swingGui.send(boundServiceName, "stopClock");
       }
     }
-    myService.send(boundServiceName, "publishState");
+    swingGui.send(boundServiceName, "publishState");
   }
 
   public void addClockEvent(Date time, String name, String method, Object... data) {
-    myService.send(boundServiceName, "addClockEvent", time, name, method, data);
+    swingGui.send(boundServiceName, "addClockEvent", time, name, method, data);
   }
 
   @Override

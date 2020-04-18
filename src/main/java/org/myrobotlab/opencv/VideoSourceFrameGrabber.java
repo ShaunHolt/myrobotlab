@@ -1,9 +1,11 @@
 package org.myrobotlab.opencv;
 
+import java.awt.image.BufferedImage;
 import java.util.LinkedList;
 
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.javacv.FrameGrabber;
+import org.bytedeco.javacv.Java2DFrameConverter;
 import org.myrobotlab.image.SerializableImage;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.service.OpenCV;
@@ -31,7 +33,7 @@ public class VideoSourceFrameGrabber extends FrameGrabber {
 
     synchronized (imgq) {
       if (imgq.size() > maxQueue) {
-        log.warn(String.format("Image Source BUFFER OVERRUN size %d dropping frames", imgq.size()));
+        log.warn("Image Source BUFFER OVERRUN size {} dropping frames", imgq.size());
         try {
           // FIXME ??? it's not nice to keep the inbound thread
           // waiting No ???
@@ -60,7 +62,7 @@ public class VideoSourceFrameGrabber extends FrameGrabber {
           } catch (InterruptedException e) {
           } // must own the lock
         } else {
-          image = OpenCV.BufferedImageToFrame(imgq.removeLast().getImage());
+          image = bufferedImageToFrame(imgq.removeLast().getImage());
           // image = IplImage.createFrom(imgq.removeLast().getImage());
         }
       }
@@ -68,6 +70,14 @@ public class VideoSourceFrameGrabber extends FrameGrabber {
     }
 
     return image;
+  }
+
+  /**
+   * convert BufferedImages to IplImages
+   */
+  public static Frame bufferedImageToFrame(BufferedImage src) {
+    Java2DFrameConverter jconverter = new Java2DFrameConverter();
+    return jconverter.convert(src);
   }
 
   @Override

@@ -2,12 +2,9 @@ package org.myrobotlab.service;
 
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.service.data.JoystickData;
-import org.myrobotlab.service.interfaces.JoystickListener;
 import org.myrobotlab.service.interfaces.MotorControl;
 import org.myrobotlab.service.interfaces.MotorController;
 import org.slf4j.Logger;
@@ -26,8 +23,8 @@ public class Chassis extends Service {
   MotorControl right;
   Joystick joystick;
 
-  public Chassis(String n) {
-    super(n);
+  public Chassis(String n, String id) {
+    super(n, id);
   }
 
   /**
@@ -52,8 +49,6 @@ public class Chassis extends Service {
     return meta;
   }
 
-  
-
   public static void main(String[] args) {
     try {
 
@@ -69,7 +64,7 @@ public class Chassis extends Service {
       // virtual = True
 
       String port = "COM14";
-      //String port = "/dev/ttyUSB0";
+      // String port = "/dev/ttyUSB0";
 
       // start optional virtual serial service, used for test
       if (virtual) {
@@ -97,12 +92,12 @@ public class Chassis extends Service {
       sabertooth.attach(m2);
       m1.attach(joy.getAxis("y"));
       m2.attach(joy.getAxis("rz"));
-      
+
       m1.setInverted(true);
       m2.setInverted(true);
 
       sabertooth.connect(port);
-      
+
       Chassis chassis = (Chassis) Runtime.start("m1", "MotorPort");
       // chassis.setLeftMotor(m1);
       // chassis.setRightMotor(m1);
@@ -149,4 +144,4 @@ public class Chassis extends Service {
       Logging.logError(e);
     }
   }
-  }
+}

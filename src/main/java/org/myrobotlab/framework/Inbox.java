@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.myrobotlab.framework.interfaces.MessageListener;
 import org.myrobotlab.logging.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -48,10 +49,10 @@ public class Inbox implements Serializable {
   int maxQueue = 1024; // will need to adjust unit test if you change this
   // value
 
-  HashMap<Long, Object[]> blockingList = new HashMap<Long, Object[]>();
+  public HashMap<Long, Object[]> blockingList = new HashMap<Long, Object[]>();
 
   List<MessageListener> listeners = new ArrayList<MessageListener>();
-  
+
   public Inbox() {
     this("Inbox");
   }
@@ -60,16 +61,17 @@ public class Inbox implements Serializable {
     this.name = name;
   }
 
+  
   public void add(Message msg) {
     if ((msg.historyList.contains(name))) {
-      log.error(String.format("* %s dumping duplicate message %s.%s msgid - %d %s", name, msg.name, msg.method, msg.msgId, msg.historyList));
+      log.error("* {} dumping duplicate message {}.{} msgid - {} {}", name, msg.getName(), msg.method, msg.msgId, msg.historyList);
       return;
     }
 
     msg.historyList.add(name);
 
     synchronized (msgBox) {
-      while (blocking && msgBox.size() == maxQueue) // queue "full"
+      while (blocking && (msgBox.size() >= maxQueue)) // queue "full"
       {
         try {
           msgBox.wait();
@@ -80,18 +82,18 @@ public class Inbox implements Serializable {
 
       if (msgBox.size() > maxQueue) {
         bufferOverrun = true;
-        log.warn(String.format("%s inbox BUFFER OVERRUN dumping msg size %d - %s", name, msgBox.size(), msg.method));
+        log.warn("{} inbox BUFFER OVERRUN dumping msg size {} - {}", name, msgBox.size(), msg.method);
       } else {
         msgBox.addFirst(msg);
         // Logging.logTime(String.format("inbox - %s size %d", name,
         // msgBox.size()));
         if (log.isDebugEnabled()) {
-          log.debug(String.format("%s.msgBox + 1 = %d", name, msgBox.size()));
+          log.debug("{}.msgBox + 1 = {}", name, msgBox.size());
         }
         msgBox.notifyAll(); // must own the lock
       }
     }
-    
+
     // TODO: move this to a base class Inbox/Outbox are very similar.
     // now that it's actually in the queue. let's notify the listeners
     for (MessageListener ml : listeners) {
@@ -125,16 +127,17 @@ public class Inbox implements Serializable {
    * message they invoke it.
    * 
    * @return the Message on the queue
-   * @throws InterruptedException e
+   * @throws InterruptedException
+   *           e
    * @see Message
    */
   public Message getMsg() throws InterruptedException {
     /*
      * TODO - remove below - Inbox will call switchboards
-     * serializer/deserializer &amp; communicator send/recieve interface switchboard
-     * has references to serializer and communicator - also all configuration
-     * needed At this level ALL details on where the Message / Message came from
-     * should be hidden and interfaces should be exposed only-
+     * serializer/deserializer &amp; communicator send/recieve interface
+     * switchboard has references to serializer and communicator - also all
+     * configuration needed At this level ALL details on where the Message /
+     * Message came from should be hidden and interfaces should be exposed only-
      */
 
     Message msg = null;
@@ -148,7 +151,7 @@ public class Inbox implements Serializable {
           msgBox.wait(); // must own the lock
         } else {
           msg = msgBox.removeLast();
-          log.debug(String.format("%s.msgBox -1 %d", name, msgBox.size()));
+          log.debug("{}.msgBox -1 {}", name, msgBox.size());
 
           // --- sendBlocking support begin --------------------
           // TODO - possible safety check msg.status == Message.RETURN
@@ -193,7 +196,10 @@ public class Inbox implements Serializable {
   }
 
   public void addMessageListener(MessageListener ml) {
+    // already attached.
+    if (listeners.contains(ml))
+      return;
     listeners.add(ml);
   }
-  
+
 }

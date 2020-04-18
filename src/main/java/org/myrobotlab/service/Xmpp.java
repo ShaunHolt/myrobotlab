@@ -1,7 +1,6 @@
 package org.myrobotlab.service;
 
 import java.io.Serializable;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -34,8 +33,6 @@ import org.jivesoftware.smack.roster.packet.RosterPacket.ItemStatus;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration.Builder;
-import org.myrobotlab.codec.Api;
-import org.myrobotlab.codec.CodecUri;
 import org.myrobotlab.codec.CodecUtils;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
@@ -45,7 +42,6 @@ import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.net.Connection;
 import org.myrobotlab.service.interfaces.Gateway;
 import org.slf4j.Logger;
 
@@ -105,7 +101,7 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
   static public ServiceType getMetaData() {
     ServiceType meta = new ServiceType(Xmpp.class.getCanonicalName());
     meta.addDescription("xmpp service to access the jabber network");
-    meta.addCategory("connectivity");
+    meta.addCategory("cloud","network");
 
     meta.addDependency("org.igniterealtime.smack", "smack-java7", "4.1.6");
     meta.addDependency("org.igniterealtime.smack", "smack-tcp", "4.1.6");
@@ -114,8 +110,6 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
 
     return meta;
   }
-
-  transient CodecUri uri = new CodecUri();
 
   TreeMap<String, Contact> contacts = new TreeMap<String, Contact>();
   String username;
@@ -145,8 +139,8 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
 
   transient Chat chat = null;
 
-  public Xmpp(String n) {
-    super(n);
+  public Xmpp(String n, String id) {
+    super(n, id);
   }
 
   public void addBuddy(String user) throws NotLoggedInException, NoResponseException, XMPPErrorException, NotConnectedException {
@@ -156,12 +150,6 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
 
     // null groups
     roster.createEntry("grog@myrobotlab.org", "grog", null);
-  }
-
-  @Override
-  public void addConnectionListener(String name) {
-    // TODO Auto-generated method stub
-
   }
 
   public void addXmppMsgListener(Service service) {
@@ -255,18 +243,6 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
 
   }
 
-  @Override
-  public HashMap<URI, Connection> getClients() {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
-  @Override
-  public List<Connection> getConnections(URI clientKey) {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
   public Contact getContact(RosterEntry r) {
     Contact contact = new Contact();
     contact.name = r.getName();
@@ -309,12 +285,6 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
   }
 
   @Override
-  public String getPrefix(URI protocolKey) {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
-  @Override
   public void presenceChanged(Presence presence) {
     log.info("presenceChanged {}", presence);
     // String user = presence.getFrom();
@@ -341,13 +311,16 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
       if (body.startsWith("/")) {
         // String pathInfo = String.format("/%s/service%s",
         // CodecUtils.PREFIX_API, body); FIXME - wow that was horrific
-        String pathInfo = String.format("/%s%s", Api.PREFIX_API, body);
+        String pathInfo = String.format("/%s%s", CodecUtils.PREFIX_API, body);
         try {
-          org.myrobotlab.framework.Message msg = CodecUri.decodePathInfo(pathInfo);
+          // org.myrobotlab.framework.Message msg = CodecUri.decodePathInfo(pathInfo);
+          org.myrobotlab.framework.Message msg =  CodecUtils.cliToMsg(getName(), null, pathInfo);
+          
+          // FIXME - do the same as InProcessCli & WebGui
           Object ret = null;
-          ServiceInterface si = Runtime.getService(msg.name);
+          ServiceInterface si = Runtime.getService(msg.getName());
           if (si == null) {
-            ret = Status.error("could not find service %s", msg.name);
+            ret = Status.error("could not find service %s", msg.getName());
           } else {
             ret = si.invoke(msg.method, msg.data);
           }
@@ -377,12 +350,6 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
   @Override
   public void processMessage(Message msg) {
     log.info("here");
-  }
-
-  @Override
-  public Connection publishConnect(Connection keys) {
-    // TODO Auto-generated method stub
-    return null;
   }
 
   public Contact publishPresenceChanged(Contact contact) {
@@ -427,15 +394,8 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
   }
 
   @Override
-  public void sendRemote(String key, org.myrobotlab.framework.Message msg) throws URISyntaxException {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void sendRemote(URI key, org.myrobotlab.framework.Message msg) {
-    // TODO Auto-generated method stub
-
+  public void sendRemote(org.myrobotlab.framework.Message msg) throws URISyntaxException {
+    log.error("implement me");
   }
 
   public void setStatus(boolean available, String status) {
@@ -575,22 +535,31 @@ public class Xmpp extends Service implements Gateway, ChatManagerListener, ChatM
 
   }
 
-@Override
-public String publishConnect() {
-	// TODO Auto-generated method stub
-	return null;
-}
+  @Override
+  public List<String> getClientIds() {
+    return Runtime.getInstance().getConnectionUuids(getName());
+  }
 
-@Override
-public String publishDisconnect() {
-	// TODO Auto-generated method stub
-	return null;
-}
+  @Override
+  public Map<String, Map<String, Object>> getClients() {
+    return Runtime.getInstance().getConnections(getName());
+  }
 
-@Override
-public Status publishError() {
-	// TODO Auto-generated method stub
-	return null;
-}
+  @Override
+  public Object sendBlockingRemote(org.myrobotlab.framework.Message msg, Integer timeout) {
+    // TODO Auto-generated method stub
+    // FIXME implement !!
+    return null;
+  }
+
+  @Override
+  public boolean isLocal(org.myrobotlab.framework.Message msg) {
+    return Runtime.getInstance().isLocal(msg);
+  }
+
+  @Override
+  public org.myrobotlab.framework.Message getDefaultMsg(String connId) {
+    return Runtime.getInstance().getDefaultMsg(connId);
+  }
 
 }

@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -28,277 +28,350 @@
 
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.helper.opencv_core.CV_RGB;
-import static org.bytedeco.javacpp.opencv_core.CV_TERMCRIT_EPS;
-import static org.bytedeco.javacpp.opencv_core.CV_TERMCRIT_ITER;
-import static org.bytedeco.javacpp.opencv_core.IPL_DEPTH_32F;
-import static org.bytedeco.javacpp.opencv_core.cvCopy;
-import static org.bytedeco.javacpp.opencv_core.cvPoint;
-import static org.bytedeco.javacpp.opencv_core.cvSize;
-import static org.bytedeco.javacpp.opencv_core.cvTermCriteria;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_BGR2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCvtColor;
-import static org.bytedeco.javacpp.opencv_imgproc.cvGoodFeaturesToTrack;
-import static org.bytedeco.javacpp.opencv_imgproc.cvLine;
-import static org.bytedeco.javacpp.opencv_video.cvCalcOpticalFlowPyrLK;
+import static org.bytedeco.opencv.global.opencv_core.CV_TERMCRIT_EPS;
+import static org.bytedeco.opencv.global.opencv_core.CV_TERMCRIT_ITER;
+import static org.bytedeco.opencv.global.opencv_core.cvCopy;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_BGR2GRAY;
+import static org.bytedeco.opencv.global.opencv_imgproc.cornerSubPix;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCvtColor;
+import static org.bytedeco.opencv.global.opencv_imgproc.goodFeaturesToTrack;
+import static org.bytedeco.opencv.global.opencv_video.calcOpticalFlowPyrLK;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.FloatPointer;
-import org.bytedeco.javacpp.IntPointer;
-import org.bytedeco.javacpp.opencv_core.CvPoint;
-import org.bytedeco.javacpp.opencv_core.CvPoint2D32f;
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.bytedeco.javacpp.helper.opencv_core.CvArr;
+import org.bytedeco.javacpp.indexer.FloatIndexer;
+import org.bytedeco.javacpp.indexer.UByteIndexer;
+import org.bytedeco.opencv.opencv_core.CvSize;
+import org.bytedeco.opencv.opencv_core.IplImage;
+import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_core.Size;
+import org.bytedeco.opencv.opencv_core.TermCriteria;
+import org.myrobotlab.cv.TrackingPoint;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.service.data.Point2Df;
+import org.myrobotlab.math.geometry.Point;
 import org.slf4j.Logger;
 
+/**
+ * 
+ * TODO - now TrackingPoints can be "id" so the entire lifecycle of the point can be followed.
+ * This should allow for more intelligent tracking strategies in the future
+ * 
+ * <pre>
+ * Future API ============
+ * setRoi(x,y, width, height)
+ * addPoint(rect) - in Roi goodfeature
+ * addPoint(x, y)
+ * resetPoint(id, x, y)
+ * removePoint(id)
+ * removeLostPoints()
+ * clearPoints
+ * 
+ * </pre>
+ * 
+ * @author GroG
+ *
+ */
 public class OpenCVFilterLKOpticalTrack extends OpenCVFilter {
-
-  private static final long serialVersionUID = 1L;
 
   public final static Logger log = LoggerFactory.getLogger(OpenCVFilterLKOpticalTrack.class);
 
-  private static final int maxPointCount = 30;
+  private static final long serialVersionUID = 1L;
+  public boolean addRemovePoint2dfPoint = false;
 
-  // external modifiers
-  public boolean addRemovePoint = false;
   public boolean clearPoints = false;
+
+  transient Mat cornersA = null;
+  transient Mat cornersB = null;
+
+  transient Mat featureErrors = null;
+  transient Mat featuresFound = null;
+
+  boolean getSubPixels = false;
+
+  transient IplImage grayImgA = null;
+  transient IplImage grayImgB = null;
+
+  transient Mat matA = null;
+  transient Mat matB = null;
+
+  int maxPointCnt = 50;
+
   public boolean needTrackingPoints = false;
-  public Point2Df samplePoint = new Point2Df();
 
-  int validCorners = 0;
+  public List<Point> pointsToPublish = new ArrayList<>();
 
-  // start //////////////////////
+  boolean printCount = true;
 
-  // transient IntPointer count = new IntPointer(0).put(maxPointCount);
-  transient IntPointer count = new IntPointer(0).put(0);
+  public Point samplePoint = null;
 
-  transient IplImage imgA = null;
-  transient IplImage imgB = null;
+  public Map<Integer, TrackingPoint> trackingPoints = new HashMap<>();
 
-  transient IplImage pyrA = null;
-  transient IplImage pyrB = null;
+  // necessary mapping to find the "id" of the tracking point into the current
+  // index of the
+  // buffer of points supplied to calc method
+  public Map<String, Integer> nameToIndex = new HashMap<>();
 
-  int win_size = 15;
+  int winSize = 15;
 
-  // Get the features for tracking
-  transient IplImage eig = null;
-  transient IplImage tmp = null;
+  Mat zeroPoints = toMat(IplImage.create(new CvSize(0, 0), 32, 2));
 
-  transient BytePointer features_found = new BytePointer(maxPointCount);
-  transient FloatPointer feature_errors = new FloatPointer(maxPointCount);
-
-  transient CvPoint2D32f cornersA = new CvPoint2D32f(maxPointCount);
-  transient CvPoint2D32f cornersB = new CvPoint2D32f(maxPointCount);
-  transient CvPoint2D32f cornersC = new CvPoint2D32f(maxPointCount);
-
-  transient CvArr mask = null;
-
-  public ArrayList<Point2Df> pointsToPublish = new ArrayList<Point2Df>();
+  private long currentPntCnt;
 
   public OpenCVFilterLKOpticalTrack() {
-    super();
+    this(null);
   }
 
   public OpenCVFilterLKOpticalTrack(String name) {
     super(name);
+    // Loader.load(opencv_java.class);
+    // initialize to 0 set of points
+    cornersA = zeroPoints;
   }
 
-  public void clearPoints() {
-    clearPoints = true;
+
+  public String addPoint(int x, int y) {
+    return addPoint(null, x, y);
   }
 
-  @Override
-  public IplImage display(IplImage frame, OpenCVData data) {
+  public String addPoint(String id, int x, int y) {
 
-    // Make an image of the results
-    // for (int i = 0; i < count.get(); i++) {
-    for (int i = 0; i < count.get(); i++) {
-      cornersA.position(i);
-      cornersB.position(i);
-      cornersC.position(i);
+    maxPointCnt++;
 
-      features_found.position(i);
-      feature_errors.position(i);
-
-      if (features_found.get() == 0 || feature_errors.get() > 550) {
-        continue;
-      }
-
-      // line from previous frame point to current frame point
-      CvPoint p0 = cvPoint(Math.round(cornersC.x()), Math.round(cornersC.y()));
-      CvPoint p1 = cvPoint(Math.round(cornersB.x()), Math.round(cornersB.y()));
-      cvLine(frame, p0, p1, CV_RGB(255, 0, 0), 2, 8, 0);
+    if (id == null) {
+      id = String.format("%d", maxPointCnt);
     }
-    // reset internal position
-    cornersA.position(0);
-    cornersB.position(0);
-    cornersC.position(0);
-    features_found.position(0);
-    feature_errors.position(0);
-    return frame;
+
+    // Mat tmp = toMat(IplImage.create(new CvSize(pointCount, 1), 32, 2));
+    // int newPointCnt = trackingPoints.size() + 1;
+    // cornersA = toMat(IplImage.create(new CvSize(newPointCnt, 1), 32, 2));
+    cornersA = resize(cornersA, 1);
+
+    FloatIndexer idx = cornersA.createIndexer();
+    
+    idx.put(idx.size(0) - 1, 0, x);
+    idx.put(idx.size(0) - 1, 1, y);
+    idx.release();
+
+    return id;
+  }
+
+  public Mat resize(Mat toResize, int amount) {
+
+    FloatIndexer idx = toResize.createIndexer();
+    Mat tmp = toMat(IplImage.create(new CvSize(1, (int) idx.size(0) + amount), 32, 2));
+    FloatIndexer newIdx = tmp.createIndexer();
+
+    // copy contents
+    for (int i = 0; i < idx.size(0); i++) {
+      newIdx.put(i, 0, idx.get(i,0));
+      newIdx.put(i, 1, idx.get(i,1));
+      log.info("here");
+    }
+
+    toResize.release();
+    newIdx.release();
+    idx.release();
+
+    return tmp;
   }
 
   @Override
   public void imageChanged(IplImage image) {
 
-    eig = IplImage.create(imageSize, IPL_DEPTH_32F, 1);
-    tmp = IplImage.create(imageSize, IPL_DEPTH_32F, 1);
-
-    imgB = IplImage.create(imageSize, 8, 1);
-    imgA = IplImage.create(imageSize, 8, 1);
+    grayImgA = IplImage.create(image.cvSize(), 8, 1);
+    grayImgB = IplImage.create(image.cvSize(), 8, 1);
 
     if (channels == 3) {
-      cvCvtColor(image, imgB, CV_BGR2GRAY);
-      cvCopy(imgB, imgA);
+      cvCvtColor(image, grayImgB, CV_BGR2GRAY);
+      cvCopy(grayImgB, grayImgA);
     }
+  }
 
-    cornersA = new CvPoint2D32f(maxPointCount);
-    cornersB = new CvPoint2D32f(maxPointCount);
-    cornersC = new CvPoint2D32f(maxPointCount);
+  public void printCorners(Mat a) {
+    FloatIndexer idx = a.createIndexer();
+    StringBuilder sb = new StringBuilder();
 
-    // Call Lucas Kanade algorithm
-    features_found = new BytePointer(maxPointCount);
-    feature_errors = new FloatPointer(maxPointCount);
-
+    // copy contents
+    for (int i = 0; i < idx.size(0); i++) {
+      sb.append(String.format("(%d,%d)", (int)idx.get(i), (int)idx.get(i+1)));     
+    }    
+    idx.release();
+    log.info(sb.toString());
+  }
+  
+  public void printDirections(List<TrackingPoint> dir) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < dir.size(); ++i) {
+      TrackingPoint d = dir.get(i);
+      sb.append(String.format("%03d,%03d->%03d,%03d|", (int) d.p0.x, (int) d.p0.y, (int) d.p1.x, (int) d.p1.y));
+    }
+    log.info("{}", sb);
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
-
+  public IplImage process(IplImage image) {
     if (channels == 3) {
-      cvCvtColor(image, imgB, CV_BGR2GRAY);
+      cvCvtColor(image, grayImgB, CV_BGR2GRAY);
     } else {
-      imgB = image;
+      grayImgB = image;
     }
 
-    if (clearPoints) {
-      pointsToPublish.clear();
-      count.put(0);
-      clearPoints = false;
+    // load 1st prev image - must have at least 2 images
+    if (matA == null) {
+      matA = toMat(grayImgA);
+      return image;
     }
 
-    if (addRemovePoint && count.get() < maxPointCount) {
-      cornersA.position(count.get()).x(samplePoint.x);
-      cornersA.position(count.get()).y(samplePoint.y);
-      count.put(count.get() + 1);
-      addRemovePoint = false;
+    // current image
+    matB = toMat(grayImgB);
+
+    // cornersA = toMat(IplImage.create(new CvSize(maxPointCnt, 1), 32, 2));
+
+    if (samplePoint != null) {
+      addPoint(samplePoint.x, samplePoint.y);
+      samplePoint = null;
     }
 
     if (needTrackingPoints) {
-      count.put(30);
-      cvGoodFeaturesToTrack(imgA, eig, tmp, cornersA, count, 0.05, 5.0, mask, 3, 0, 0.04);
-      // cvFindCornerSubPix(imgA, points, count.get(), cvSize(win_size,
-      // win_size), cvSize(-1, -1), cvTermCriteria(CV_TERMCRIT_ITER |
-      // CV_TERMCRIT_EPS, 20, 0.03));
-
+      cornersA.release();
+      cornersA = new Mat();
+      goodFeaturesToTrack(matA, cornersA, maxPointCnt, 0.05, 5.0, null, 3, false, 0.04);
       needTrackingPoints = false;
+
+      if (getSubPixels) {
+        cornerSubPix(matA, cornersA, new Size(winSize, winSize), new Size(-1, -1), new TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.03));
+      }
     }
 
-    // http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html#void
-    // calcOpticalFlowPyrLK(InputArray prevImg, InputArray nextImg,
-    // InputArray prevPts, InputOutputArray nextPts, OutputArray status,
-    // OutputArray err, Size winSize, int maxLevel, TermCriteria criteria,
-    // int flags, double minEigThreshold)
-    cvCalcOpticalFlowPyrLK(imgA, imgB, pyrA, pyrB, cornersA, cornersB, count.get(), cvSize(win_size, win_size), 5, features_found, feature_errors,
-        cvTermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.3), 0);
-
-    StringBuffer ff = new StringBuffer();
-    StringBuffer fe = new StringBuffer();
-    StringBuffer cA = new StringBuffer();
-    StringBuffer cB = new StringBuffer();
-
-    validCorners = 0;
-    pointsToPublish = new ArrayList<Point2Df>();
-
-    // shift newly calculated corner flows
-    for (int i = 0; i < count.get(); i++) {
-      features_found.position(i);
-      feature_errors.position(i);
-      cornersA.position(i);
-      cornersB.position(i);
-      cornersC.position(i);
-
-      // debugging
-      ff.append(features_found.get());
-      fe.append(feature_errors.get());
-      cA.append(String.format("(%f,%f)", cornersA.x(), cornersA.y()));
-      float x = cornersB.x();
-      float y = cornersB.y();
-      cB.append(String.format("(%f,%f)", x, y));
-
-      // if in eror - don't bother processing
-      if (features_found.get() == 0 || feature_errors.get() > 550) {
-        // System.out.println("found " + features_found.get() +
-        // " error " + feature_errors.get());
-        continue;
-      }
-
-      if (useFloatValues) {
-        pointsToPublish.add(new Point2Df(x / width, y / height));
-      } else {
-        pointsToPublish.add(new Point2Df(x, y));
-      }
-
-      ++validCorners;
-      // putting new points in previous buffer
-      // PROBABLY WRONG !!!
-      // refer to ->
-      // http://stackoverflow.com/questions/9344503/equivalent-of-opencv-statement-in-java-using-javacv
-      // FloatPointer p = new FloatPointer(cvGetSeqElem(circles, i));
-
-      // we want to save previous for display to show the delta
-      cornersC.put(cornersA.x(), cornersA.y());
-      // we need to take the latest corners and move them to our next
-      // previous
-      cornersA.put(cornersB.x(), cornersB.y());
-      // cornersA.put(cornersB.get(i), i);
-      // cvLine(imgC, p0, p1, CV_RGB(255, 0, 0), 2, 8, 0);
-    } // iterated through points
-
-    if (publishData) {
-      data.set(pointsToPublish);
+    if (clearPoints) {
+      cornersA.release();
+      cornersA = zeroPoints;
+      clearPoints = false;
+      trackingPoints.clear();
+      pointsToPublish.clear();
     }
 
-    log.debug(String.format("MAX_POINT_COUNT %d", maxPointCount));
-    log.debug(String.format("count %d", count.get()));
-    log.debug(String.format("features_found %s", ff.toString()));
-    log.debug(String.format("feature_errors %s", fe.toString()));
-    log.debug(String.format("cA %s", cA.toString()));
-    log.debug(String.format("cB %s", cB.toString()));
+    // cornersA = toMat(IplImage.create(new CvSize(maxPointCnt, 1), 32,
+    // 2));//new Mat(); // FIXME - empty ???
 
-    log.debug(String.format("valid coners %d", validCorners));
+    FloatIndexer cornersAidx = cornersA.createIndexer();
+    if (cornersAidx.size(0) == 0) {
+      // no requested tracking points
+      return image;
+    }
 
-    // swap
-    // TODO - release what imgA pointed to?
-    // cvCopy(imgA, imgB);
-    cvCopy(imgB, imgA);
+    featuresFound = new Mat();
+    featureErrors = new Mat();
+    cornersB = new Mat();
 
-    // reset internal position
-    cornersA.position(0);
-    cornersB.position(0);
-    cornersC.position(0);
-    feature_errors.position(0);
-    features_found.position(0);
+    // FIXME - is featuresFound input, output, or both ???
+    // calcOpticalFlowPyrLK(imgA, imgB, cornersA, cornersB, featuresFound, featureErrors);
+    
+    if (currentPntCnt != cornersAidx.size(0)) {
+      printCorners(cornersA);
+      currentPntCnt = cornersAidx.size(0);
+    }
+
+    calcOpticalFlowPyrLK(matA, matB, cornersA, cornersB, featuresFound, featureErrors, new Size(winSize, winSize), 5, new TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.3),
+        0, 1e-4);
+
+    // Make an image of the results
+
+    // create publishing containers
+    pointsToPublish = new ArrayList<>();
+    // trackingPoints = new HashMap<>();
+
+    FloatIndexer cornersBidx = cornersB.createIndexer();
+    UByteIndexer featuresFoundIdx = featuresFound.createIndexer();
+    FloatIndexer featureErrorsIdx = featureErrors.createIndexer();
+
+    for (int i = 0; i < cornersAidx.size(0); i++) {
+      // FIXME - send errors too
+      if (featuresFoundIdx.get(i) == 0 || featureErrorsIdx.get(i) > 550) {
+        // FIXME - pruning and MOST IMPORTANTLY identifying points (id) !!! with
+        // printed error index
+        // System.out.println("Error is " + feature_errors_idx.get(i) + "/n");
+        // continue;
+
+      }
+      TrackingPoint direction = new TrackingPoint(i, Math.round(cornersAidx.get(i, 0)), Math.round(cornersAidx.get(i, 1)), Math.round(cornersBidx.get(i, 0)),
+          Math.round(cornersBidx.get(i, 1)));
+
+      direction.found = featuresFoundIdx.get(i);
+      direction.error = featureErrorsIdx.get(i);
+      pointsToPublish.add(direction.p1);
+      nameToIndex.put(direction.id, i);
+      trackingPoints.put(i, direction);
+    }
+
+    // FIXME !!! - close all resources
+    // releasing previous frame
+    matA.release();
+    cornersA.release();
+    // cornersB.release();
+    featuresFound.release();
+    featureErrors.release();
+    featuresFoundIdx.release();
+    featureErrorsIdx.release();
+    cornersAidx.release();
+    cornersBidx.release();
+
+    // shift to next image
+    // prev = current
+    // imgA = imgB;
+    // imgA = imgB.clone();
+    cvCopy(grayImgB, grayImgA);
+    matA = new Mat(grayImgA);
+    cornersA = cornersB;
+
+    matB.release();
 
     return image;
   }
 
-  public void samplePoint(Float x, Float y) {
-    samplePoint((int) (x * width), (int) (y * height));
+  @Override
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
+
+    // FIXME - TODO - calculate avg direction !!!
+    int notFound = 0;
+    int errorCount = 0;
+
+    // for (int i = 0; i < trackingPoints.size(); i++) {
+    for (TrackingPoint point : trackingPoints.values()) {
+      // TrackingPoint d = trackingPoints.get(i);
+      int x0 = point.p0.x;
+      int y0 = point.p0.y;
+      int x1 = point.p1.x;
+      int y1 = point.p1.y;
+
+      graphics.setColor(Color.GREEN);
+      graphics.drawLine(x0, y0, x1, y1);
+      graphics.setColor(Color.RED);
+      graphics.drawLine(x1, y1, x1, y1);
+      graphics.fillArc(x1, y1, 3, 3, 0, 360);
+      graphics.drawString(String.format("%s %d %03f", point.id, point.found, point.error), x1 + 10, y1 - 10);
+      if (point.found == 0) {
+        ++notFound;
+      }
+      if (point.error > 550) {
+        ++errorCount;
+      }
+    }
+
+    if (printCount) {
+      graphics.drawString(String.format("points: %d errors: %d not found: %d", trackingPoints.size(), errorCount, notFound), 10, 10);
+    }
+    return image;
   }
 
   public void samplePoint(Integer x, Integer y) {
-    if (count.get() < maxPointCount) {
-      samplePoint.x = x;
-      samplePoint.y = y;
-      addRemovePoint = true;
-    } else {
-      clearPoints();
-    }
+    samplePoint = new Point(x, y);
   }
 
 }

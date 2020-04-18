@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -49,7 +49,7 @@ import java.lang.reflect.Field;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 
-import org.myrobotlab.io.FileIO;
+import org.myrobotlab.framework.Service;
 import org.myrobotlab.logging.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -59,6 +59,7 @@ import org.slf4j.Logger;
  * references: http://www.colblindor.com/color-name-hue/ - excellent resource
  * 
  */
+@Deprecated /* this class should be avoided, for resource access Service.getResource... should be used */
 public class Util {
 
   /*
@@ -73,8 +74,9 @@ public class Util {
   // static HashMap <int,>
   // array [r][g][b]
   // TODO - fix arrggh head hurts
-  final static String[][][] colorNameCube = { { { "black", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "navy", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" },
-      { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" } },
+  final static String[][][] colorNameCube = {
+      { { "black", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "navy", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" },
+          { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" } },
 
       { { "maroon", "xxx", "xxx" }, { "green", "xxx", "xxx" }, { "blue", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "gray", "xxx" }, { "xxx", "xxx", "xxx" },
           { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" }, { "xxx", "xxx", "xxx" } },
@@ -197,11 +199,11 @@ public class Util {
 
   public static Image getImage(String path, String defaultImage) {
     Image icon = null;
-    File imgURL = new File(getRessourceDir() + path);
+    File imgURL = new File(getResourceDir() + File.separator + path);
     if (isExistRessourceElement(path)) {
       try {
         icon = ImageIO.read(imgURL);
-        // log.info(imgURL.getPath());
+        //log.info("getImage({})", imgURL.getPath());
         return icon;
       } catch (IOException e) {
         log.error("getImage threw", e);
@@ -209,53 +211,60 @@ public class Util {
     }
 
     // trying default image
-    imgURL = new File(getRessourceDir() + defaultImage);
+    imgURL = new File(getResourceDir() + File.separator + defaultImage);
 
     if (imgURL != null) {
       try {
         icon = ImageIO.read(imgURL);
         return icon;
       } catch (IOException e) {
-        log.error("read image threw", e);
+        log.error("read image threw trying to read file {}", imgURL, e);
       }
     }
 
-    log.error("Couldn't find file: " + path + " or default " + defaultImage);
+    log.error("Get Image : Couldn't find file: " + path + " or default " + defaultImage);
     return null;
 
   }
 
   public static ImageIcon getImageIcon(String path) {
-    ImageIcon icon = null;
-    String resourcePath = String.format("/resource/%s", path);
-    java.net.URL imgURL = Util.class.getResource(resourcePath);
-    if (imgURL != null) {
-      icon = new ImageIcon(imgURL);
-      return icon;
-    } else {
-      log.error(String.format("Couldn't find file: %s", resourcePath));
-      return null;
-    }
+    return getImageIcon(path, null);
   }
 
   /**
+   * by default will take the resource.dir property if set.
+   * If mrl is running inside of a jar it will use the user.dir + "resource" as the directory.
+   * If mrl is not in a jar, it will use src/main/resources/resource  
+   * 
    * @return current resource directory
    */
-  public static String getRessourceDir() {
-    String ressourceDir = System.getProperty("user.dir") + File.separator + "resource" + File.separator;
-    if (!FileIO.isJar()) {
-      ressourceDir = System.getProperty("user.dir") + File.separator + "src/main/resources/resource" + File.separator;
+  public static String getResourceDir() {
+    // first try for the resource.dir system property
+    /* THIS CANNOT BE DONE IN TWO PLACES - ONE WILL ALWAYS BE 
+    String resourceDir = System.getProperty("resource.dir");
+    if (resourceDir != null) {
+      // log.info("Returning {}", resourceDir);
+      return resourceDir;
     }
-    return ressourceDir;
+    if (!FileIO.isJar()) {
+      // log.info("Not in a jar...you're running in an IDE likely.");
+      resourceDir = System.getProperty("user.dir") + File.separator + "src"+File.separator+"main"+File.separator+"resources"+File.separator+"resource";
+    } else {
+      resourceDir = System.getProperty("user.dir") + File.separator + "resource";
+    }
+    */
+    // log.info("Returning {}", resourceDir);
+    return Service.getResourceRoot();
   }
+  
 
   /**
    * Check if file exist from current resource directory
-   * 
+   * @param element - element to be tested
    * @return boolean
    */
   public static Boolean isExistRessourceElement(String element) {
-    File f = new File(getRessourceDir() + element);
+    File f = new File(getResourceDir() + File.separator + element);
     if (!f.exists()) {
       return false;
     }
@@ -265,14 +274,18 @@ public class Util {
   public static final ImageIcon getResourceIcon(String path) {
     ImageIcon icon = null;
 
-    String imgURL = getRessourceDir() + path;
+    String imgURL = path;
     if (isExistRessourceElement(path)) {
-      icon = new ImageIcon(imgURL);
+      icon = new ImageIcon(Util.getResourceDir() + File.separator + imgURL);
       return icon;
     } else {
-      log.error("Couldn't find file: " + path);
+      log.error("Get Resource Icon - Couldn't find file: {}" ,  path);
       return null;
     }
+  }
+  
+  public static ImageIcon getScaledIcon(final String name, final int x, final int y) {
+    return new ImageIcon(getImage(name).getScaledInstance(x, y,  java.awt.Image.SCALE_SMOOTH));
   }
 
   public static ImageIcon getScaledIcon(final Image image, final double scale) {
@@ -377,7 +390,7 @@ public class Util {
   {
     BufferedImage bi;
     try {
-      bi = ImageIO.read(Util.class.getResource("/resource/" + path));
+      bi = ImageIO.read(new File(Util.getResourceDir() + File.separator + path));
     } catch (IOException e) {
       log.error("could not find image " + path);
       return null;
@@ -449,6 +462,15 @@ public class Util {
     } catch (Exception e) {
       return null;
     }
+  }
+
+  public static ImageIcon getImageIcon(String path, String description) {
+    ImageIcon icon = null;
+    String resourcePath = Util.getResourceDir() + File.separator + path;
+    // ImageIcon requires forward slash in the filename (unix/internet style convention)
+    resourcePath = resourcePath.replaceAll("\\\\", "/");
+    icon = new ImageIcon(resourcePath, description);
+    return icon;
   }
 
 }

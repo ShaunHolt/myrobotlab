@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -62,7 +62,8 @@ public class AudioCapture extends Service {
 
   private static final long serialVersionUID = 1L;
 
-  public static boolean stopCapture = false;
+  public boolean stopCapture = true;
+  public boolean soundCaptured = false;
 
   ByteArrayOutputStream byteArrayOutputStream;
 
@@ -95,6 +96,7 @@ public class AudioCapture extends Service {
     public void run() {
       byteArrayOutputStream = new ByteArrayOutputStream();
       stopCapture = false;
+      broadcastState();
       try {// Loop until stopCapture is set
            // by another thread that
            // services the Stop button.
@@ -194,14 +196,15 @@ public class AudioCapture extends Service {
      */
   }
 
-  public AudioCapture(String n) {
-    super(n);
+  public AudioCapture(String n, String id) {
+    super(n, id);
   }
 
   public void captureAudio() {
     try {
       // Get everything set up for
       // capture
+      soundCaptured = false;
       audioFormat = getAudioFormat();
       DataLine.Info dataLineInfo = new DataLine.Info(TargetDataLine.class, audioFormat);
       targetDataLine = (TargetDataLine) AudioSystem.getLine(dataLineInfo);
@@ -216,7 +219,7 @@ public class AudioCapture extends Service {
       captureThread.start();
     } catch (Exception e) {
       Logging.logError(e);
-    } 
+    }
     broadcastState();
     // end catch
   }// end captureAudio method
@@ -246,33 +249,37 @@ public class AudioCapture extends Service {
   // data that has been saved in the
   // ByteArrayOutputStream
   public void playAudio() {
-    try {
-      // Get everything set up for
-      // playback.
-      // Get the previously-saved data
-      // into a byte array object.
-      byte audioData[] = byteArrayOutputStream.toByteArray();
-      // Get an input stream on the
-      // byte array containing the data
-      InputStream byteArrayInputStream = new ByteArrayInputStream(audioData);
-      AudioFormat audioFormat = getAudioFormat();
-      audioInputStream = new AudioInputStream(byteArrayInputStream, audioFormat, audioData.length / audioFormat.getFrameSize());
-      DataLine.Info dataLineInfo = new DataLine.Info(SourceDataLine.class, audioFormat);
-      sourceDataLine = (SourceDataLine) AudioSystem.getLine(dataLineInfo);
-      sourceDataLine.open(audioFormat);
-      sourceDataLine.start();
+    if (!soundCaptured) {
+      log.error("No sound captured yet");
+    } else {
+      try {
+        // Get everything set up for
+        // playback.
+        // Get the previously-saved data
+        // into a byte array object.
+        byte audioData[] = byteArrayOutputStream.toByteArray();
+        // Get an input stream on the
+        // byte array containing the data
+        InputStream byteArrayInputStream = new ByteArrayInputStream(audioData);
+        AudioFormat audioFormat = getAudioFormat();
+        audioInputStream = new AudioInputStream(byteArrayInputStream, audioFormat, audioData.length / audioFormat.getFrameSize());
+        DataLine.Info dataLineInfo = new DataLine.Info(SourceDataLine.class, audioFormat);
+        sourceDataLine = (SourceDataLine) AudioSystem.getLine(dataLineInfo);
+        sourceDataLine.open(audioFormat);
+        sourceDataLine.start();
 
-      // Create a thread to play back
-      // the data and start it
-      // running. It will run until
-      // all the data has been played
-      // back.
-      Thread playThread = new Thread(new PlayThread());
-      playThread.start();
-    } catch (Exception e) {
-      error(e);
-    } // end catch
-  }// end playAudio
+        // Create a thread to play back
+        // the data and start it
+        // running. It will run until
+        // all the data has been played
+        // back.
+        Thread playThread = new Thread(new PlayThread());
+        playThread.start();
+      } catch (Exception e) {
+        error(e);
+      } // end catch
+    } // end playAudio
+  }
 
   public ByteArrayOutputStream publishCapture() {
     return byteArrayOutputStream;
@@ -287,6 +294,7 @@ public class AudioCapture extends Service {
   public void stopAudioCapture() {
     targetDataLine.stop();
     stopCapture = true;
+    soundCaptured = true;
     broadcastState();
   }
 

@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -124,7 +124,7 @@ public class WiiDar extends Service {
           for (int i = servoLeftMax; i > servoRightMax; --i) {
             irdata.clear();
             Point p = new Point(cnt, i, RIGHT, System.currentTimeMillis());
-            servo.moveTo(i);
+            servo.moveTo((double)i);
             Thread.sleep(servoPause); // wait for data "bleh" -
             // BlockingQueue?
 
@@ -149,7 +149,7 @@ public class WiiDar extends Service {
           for (int i = servoRightMax; i < servoLeftMax; ++i) {
             irdata.clear();
             Point p = new Point(cnt, i, LEFT, System.currentTimeMillis());
-            servo.moveTo(i);
+            servo.moveTo((double)i);
             Thread.sleep(servoPause);
             if (irdata.size() == 0) {
               // out of range - no new ir data
@@ -178,9 +178,8 @@ public class WiiDar extends Service {
   /*
    * // TODO remoe these service ----- DEBUG ONLY ------ BEGIN Wii wii = new
    * Wii("wii"); Arduino arduino = new Arduino("arduino"); Servo servo = new
-   * Servo("servo"); // OpenCV opencv = new OpenCV("opencv"); SwingGui gui =
-   * new SwingGui("gui"); // TODO remoe these service ----- DEBUG ONLY ------
-   * END
+   * Servo("servo"); // OpenCV opencv = new OpenCV("opencv"); SwingGui gui = new
+   * SwingGui("gui"); // TODO remoe these service ----- DEBUG ONLY ------ END
    */
 
   public final static Logger log = LoggerFactory.getLogger(WiiDar.class);
@@ -307,7 +306,7 @@ public class WiiDar extends Service {
     LoggingFactory.init(Level.DEBUG);
     try {
 
-      WiiDar wiidar = new WiiDar("wiidar");
+      WiiDar wiidar = (WiiDar)Runtime.start("wiidar", "WiiDar");
       wiidar.startService();
       Runtime.createAndStart("gui", "SwingGui");
       // wiidar.startRobot();
@@ -318,8 +317,8 @@ public class WiiDar extends Service {
 
   }
 
-  public WiiDar(String n) {
-    super(n);
+  public WiiDar(String n, String id) {
+    super(n, id);
   }
 
   public double computeDepth(IRData ir) {
@@ -476,12 +475,12 @@ public class WiiDar extends Service {
 
   @Override
   public void stopService() {
+    super.stopService();
     if (sweep != null)
       sweep.done = true;
 
     sweeperThread = null;
 
-    super.stopService();
   }
 
   public void stopSweep() {
@@ -505,7 +504,7 @@ public class WiiDar extends Service {
     // meta.addDependency("wiiuse.wiimote", "0.12b");
 
     meta.addDependency("wiiusej", "wiiusej", "wiiusej");
-    meta.addCategory("sensor");
+    meta.addCategory("sensors");
     // no longer have hardware for this ...
     meta.setAvailable(false);
     return meta;

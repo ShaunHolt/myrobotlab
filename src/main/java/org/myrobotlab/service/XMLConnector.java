@@ -36,8 +36,8 @@ public class XMLConnector extends AbstractConnector {
   // TODO: wire in so we can interrupt and stop the crawler.
   // private boolean interrupted = false;
 
-  public XMLConnector(String name) {
-    super(name);
+  public XMLConnector(String n, String id) {
+    super(n, id);
   }
 
   @Override
@@ -60,7 +60,7 @@ public class XMLConnector extends AbstractConnector {
       saxParser = spf.newSAXParser();
     } catch (ParserConfigurationException | SAXException e) {
       // TODO Auto-generated catch block
-      log.warn("SAX Parser Error {}", e);
+      log.warn("SAX Parser Error", e);
     }
 
     try {
@@ -81,8 +81,12 @@ public class XMLConnector extends AbstractConnector {
       // xmlReader.parse(convertToFileURL(filename));
     } catch (IOException | SAXException e) {
       // TODO Auto-generated catch block
-      log.warn("SAX Parser Error {}", e);
+      log.warn("SAX Parser Error", e);
     }
+
+    // flush now that we're done.
+    flush();
+
     state = ConnectorState.STOPPED;
 
   }
@@ -137,7 +141,7 @@ public class XMLConnector extends AbstractConnector {
   static public ServiceType getMetaData() {
     ServiceType meta = new ServiceType(XMLConnector.class.getCanonicalName());
     meta.addDescription("This is an XML Connector that will parse a large xml file into many small xml documents");
-    meta.addCategory("data");
+    meta.addCategory("filter");
     // FIXME - make a service page, and /python/service example
     meta.setAvailable(false);
     return meta;

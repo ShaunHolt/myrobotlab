@@ -1,6 +1,7 @@
 package org.myrobotlab.service;
 
 import org.jnativehook.GlobalScreen;
+import org.myrobotlab.service.Runtime;
 import org.jnativehook.NativeHookException;
 import org.jnativehook.keyboard.NativeKeyEvent;
 import org.jnativehook.keyboard.NativeKeyListener;
@@ -14,7 +15,7 @@ import org.myrobotlab.framework.interfaces.ServiceInterface;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.service.data.Point2Df;
+import org.myrobotlab.math.geometry.Point2df;
 import org.slf4j.Logger;
 
 /**
@@ -31,11 +32,11 @@ public class Keyboard extends Service {
 
   String lastKeyPressed;
 
-  transient final NativeKeyboard keyboard = new NativeKeyboard();
-  transient MouseEvent mouseEvent = new MouseEvent();
-  
+  transient final NativeKeyboard keyboard;
+  transient final MouseEvent mouseEvent;
+
   static public class MouseEvent {
-    public Point2Df pos = new Point2Df();
+    public Point2df pos = new Point2df();
   }
 
   public class NativeKeyboard implements NativeKeyListener, NativeMouseInputListener, NativeMouseWheelListener {
@@ -97,32 +98,41 @@ public class Keyboard extends Service {
     }
   }
 
-  public Keyboard(String n) {
-    super(n);
+  public Keyboard(String n, String id) {
+    super(n, id);
+    if (Runtime.isHeadless()) {
+      log.warn("the Keyboard service requires a DISPLAY to function correctly");
+      keyboard = null;
+      mouseEvent = null;
+      return;
+    }
     
-    java.util.logging.Logger logger = java.util.logging.Logger.getLogger(GlobalScreen.class.getPackage().getName());
-    logger.setLevel(java.util.logging.Level.WARNING);
+    keyboard = new NativeKeyboard();
+    mouseEvent = new MouseEvent();
   }
-  
-  public void startListening() throws NativeHookException{
+
+  public void startListening() throws NativeHookException {
     GlobalScreen.registerNativeHook();
     GlobalScreen.addNativeKeyListener(keyboard);
     GlobalScreen.addNativeMouseListener(keyboard);
     GlobalScreen.addNativeMouseMotionListener(keyboard);
   }
-  
-  public void stopListening() throws NativeHookException{
+
+  public void stopListening() throws NativeHookException {
     GlobalScreen.removeNativeKeyListener(keyboard);
     GlobalScreen.removeNativeMouseListener(keyboard);
     GlobalScreen.removeNativeMouseMotionListener(keyboard);
     GlobalScreen.unregisterNativeHook();
   }
-  
 
   public void startService() {
     super.startService();
     try {
-      startListening();
+      if (Runtime.isHeadless()) {
+        log.warn("the Keyboard service requires a DISPLAY to function correctly - will not register hooks");
+      } else {
+        startListening();
+      }
     } catch (Exception e) {
       log.error("could not register", e);
     }
@@ -131,7 +141,11 @@ public class Keyboard extends Service {
   public void stopService() {
     super.stopService();
     try {
-      stopListening();
+      if (Runtime.isHeadless()) {
+        log.warn("the Keyboard service requires a DISPLAY to function correctly - will not un-register hooks");
+      } else {
+        stopListening();
+      }
     } catch (Exception e) {
       log.error("could not unregister", e);
     }
@@ -166,7 +180,7 @@ public class Keyboard extends Service {
     log.info("publishKey {}", key);
     return key;
   }
-  
+
   public Integer publishKeyCode(Integer code) {
     log.info("publishKey {}", code);
     return code;
@@ -181,13 +195,14 @@ public class Keyboard extends Service {
     log.debug("publishKeyReleased {}", key);
     return key;
   }
+
   // ========== mouse events begin ===============
   public MouseEvent publishMouse() {
     return mouseEvent;
   }
-  
+
   public MouseEvent publishMouseClicked(NativeMouseEvent me) {
-   return mouseEvent;
+    return mouseEvent;
   }
 
   public MouseEvent publishMousePressed(NativeMouseEvent me) {

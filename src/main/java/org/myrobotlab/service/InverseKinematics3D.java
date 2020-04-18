@@ -3,18 +3,20 @@ package org.myrobotlab.service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
+import org.myrobotlab.framework.interfaces.Attachable;
 import org.myrobotlab.kinematics.DHLink;
 import org.myrobotlab.kinematics.DHRobotArm;
 import org.myrobotlab.kinematics.Matrix;
 import org.myrobotlab.kinematics.Point;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
 import org.myrobotlab.math.MathUtils;
 import org.myrobotlab.service.data.JoystickData;
+import org.myrobotlab.service.interfaces.IKJointAngleListener;
 import org.myrobotlab.service.interfaces.IKJointAnglePublisher;
 import org.myrobotlab.service.interfaces.PointsListener;
 import org.slf4j.Logger;
@@ -36,24 +38,28 @@ import org.slf4j.Logger;
 public class InverseKinematics3D extends Service implements IKJointAnglePublisher, PointsListener {
 
   private static final long serialVersionUID = 1L;
-  public final static Logger log = LoggerFactory.getLogger(InverseKinematics3D.class.getCanonicalName());
+  public final static Logger log = LoggerFactory.getLogger(InverseKinematics3D.class);
 
-  private DHRobotArm currentArm = null;
+  // private DHRobotArm currentArm = null;
+  String currentArm = null;
+  private final Map<String, DHRobotArm> arms = new TreeMap<String, DHRobotArm>();
 
   // we will track the joystick input to specify our velocity.
   private Point joystickLinearVelocity = new Point(0, 0, 0, 0, 0, 0);
 
   private Matrix inputMatrix = null;
+  private Point scale = null;
 
+  // check - http://myrobotlab.org/content/inverse-kinematics-update
   transient InputTrackingThread trackingThread = null;
 
-  public InverseKinematics3D(String n) {
-    super(n);
+  public InverseKinematics3D(String n, String id) {
+    super(n, id);
     // TODO: init
   }
 
   public void startTracking() {
-    log.info(String.format("startTracking - starting new joystick input tracking thread %s_tracking", getName()));
+    log.info("startTracking - starting new joystick input tracking thread {}_tracking", getName());
     if (trackingThread != null) {
       stopTracking();
     }
@@ -85,6 +91,7 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
       // how many ms to wait between movements.
       long pollInterval = 250;
 
+      String arm = "myArm";
       isTracking = true;
       long now = System.currentTimeMillis();
       while (isTracking) {
@@ -100,14 +107,14 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
         }
         // lets get the current position
         // current position + velocity * time
-        Point current = currentPosition();
+        Point current = currentPosition(arm);
         Point targetPoint = current.add(joystickLinearVelocity.multiplyXYZ(pollInterval / 1000.0));
         if (!targetPoint.equals(current)) {
           log.info("Velocity: {} Old: {} New: {}", joystickLinearVelocity, current, targetPoint);
         }
 
         invoke("publishTracking", targetPoint);
-        moveTo(targetPoint);
+        moveTo(arm, targetPoint);
         // update current timestamp to determine how long we should wait
         // before the next moveTo is called.
         now = System.currentTimeMillis();
@@ -124,13 +131,13 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
     }
   }
 
-  public Point currentPosition() {
-    return currentArm.getPalmPosition();
+  public Point currentPosition(String name) {
+    return arms.get(name).getPalmPosition();
   }
 
-  public void moveTo(double x, double y, double z) {
+  public void moveTo(String arm, double x, double y, double z) {
     // TODO: allow passing roll pitch and yaw
-    moveTo(new Point(x, y, z, 0, 0, 0));
+    moveTo(arm, new Point(x, y, z, 0, 0, 0));
   }
 
   /**
@@ -161,6 +168,11 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
     return inputMatrix;
   }
 
+  public Point createInputScale(double x, double y, double z) {
+    scale = new Point(x, y, z, 0, 0, 0);
+    return scale;
+  }
+
   public Point rotateAndTranslate(Point pIn) {
 
     Matrix m = new Matrix(4, 1);
@@ -179,52 +191,75 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
     return pOut;
   }
 
-  public void centerAllJoints() {
-    currentArm.centerAllJoints();
-    publishTelemetry();
+  public void centerAllJoints(String name) {
+    arms.get(name).centerAllJoints();
+    publishTelemetry(name);
   }
 
-  public void moveTo(Point p) {
+  /**
+   * Compute the inverse kinematics to move the robot hand to the destination
+   * first scale the input point, then apply
+   * 
+   * @param p
+   */
+  public void moveTo(String name, Point p) {
 
-    // log.info("Move TO {}", p );
+    log.info("Raw Input : {} - {}", name,  p);
+    if (scale != null) {
+      // scale the x,y,z by the factors stored in the scale point. (really
+      // vector i guess?)
+      double x = scale.getX() * p.getX();
+      double y = scale.getY() * p.getY();
+      double z = scale.getZ() * p.getZ();
+      p = new Point(x, y, z, p.getRoll(), p.getPitch(), p.getYaw());
+      log.info("Scaled Input {}", p);
+    }
     if (inputMatrix != null) {
       p = rotateAndTranslate(p);
+      log.info("Rot/Translated input {}", p);
     }
-    boolean success = currentArm.moveToGoal(p);
-
+    boolean success = arms.get(name).moveToGoal(p);
+success = true; // FIXME change object to send error tolerance - let the robot determine if it was success or not
     if (success) {
-      publishTelemetry();
+      publishTelemetry(name);
+    } else {
+      log.info("Unsuccessful to solve IK!");
     }
   }
+  
+  // public void publishTelemetry()
 
-  public void publishTelemetry() {
+  // TODO - publishTelemetry() which iterates through all parts 
+  public void publishTelemetry(String name) {
     Map<String, Double> angleMap = new HashMap<String, Double>();
-    for (DHLink l : currentArm.getLinks()) {
+    for (DHLink l : arms.get(name).getLinks()) {
       String jointName = l.getName();
       double theta = l.getTheta();
       // angles between 0 - 360 degrees.. not sure what people will really want?
       // - 180 to + 180 ?
-      angleMap.put(jointName, (double) MathUtils.radToDeg(theta) % 360.0F);
+      double angle = MathUtils.radToDeg(theta) + l.getOffset();
+      angleMap.put(jointName, (double) angle % 360.0F);
+      log.info("Servo : {}  Angle : {}", jointName, angleMap.get(jointName));
     }
     invoke("publishJointAngles", angleMap);
     // we want to publish the joint positions
     // this way we can render on the web gui..
-    double[][] jointPositionMap = createJointPositionMap();
+    double[][] jointPositionMap = createJointPositionMap(name);
     // TODO: pass a better datastructure?
     invoke("publishJointPositions", (Object) jointPositionMap);
   }
 
-  public double[][] createJointPositionMap() {
+  public double[][] createJointPositionMap(String name) {
 
-    double[][] jointPositionMap = new double[currentArm.getNumLinks() + 1][3];
+    double[][] jointPositionMap = new double[arms.get(name).getNumLinks() + 1][3];
 
     // first position is the origin... second is the end of the first link
     jointPositionMap[0][0] = 0;
     jointPositionMap[0][1] = 0;
     jointPositionMap[0][2] = 0;
 
-    for (int i = 1; i <= currentArm.getNumLinks(); i++) {
-      Point jp = currentArm.getJointPosition(i - 1);
+    for (int i = 1; i <= arms.get(name).getNumLinks(); i++) {
+      Point jp = arms.get(name).getJointPosition(i - 1);
       jointPositionMap[i][0] = jp.getX();
       jointPositionMap[i][1] = jp.getY();
       jointPositionMap[i][2] = jp.getZ();
@@ -232,26 +267,33 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
     return jointPositionMap;
   }
 
-  public DHRobotArm getCurrentArm() {
-    return currentArm;
+  public DHRobotArm getCurrentArm(String name) {
+    return arms.get(name);
   }
 
-  public void setCurrentArm(DHRobotArm currentArm) {
-    this.currentArm = currentArm;
+  public void setCurrentArm(String name, DHRobotArm arm) {
+    arm.setIk3D(this);
+    this.arms.put(name, arm);
+  }
+  
+  public void attach(Attachable attachable) {
+    if (attachable instanceof IKJointAngleListener) {
+      addListener("publishJointAngles", attachable.getName(), "onJointAngles");
+    }
   }
 
   public static void main(String[] args) throws Exception {
-    LoggingFactory.getInstance().configure();
-    LoggingFactory.getInstance().setLevel(Level.INFO);
+    LoggingFactory.init("info");
 
+    String arm = "myArm";
     Runtime.createAndStart("python", "Python");
     Runtime.createAndStart("gui", "SwingGui");
 
     InverseKinematics3D inversekinematics = (InverseKinematics3D) Runtime.start("ik3d", "InverseKinematics3D");
     // InverseKinematics3D inversekinematics = new InverseKinematics3D("iksvc");
-    inversekinematics.setCurrentArm(InMoovArm.getDHRobotArm());
+    inversekinematics.setCurrentArm(arm, InMoovArm.getDHRobotArm("i01", "left"));
     //
-    inversekinematics.getCurrentArm().setIk3D(inversekinematics);
+    // inversekinematics.getCurrentArm(arm).setIk3D(inversekinematics);
     // Create a new DH Arm.. simpler for initial testing.
     // d , r, theta , alpha
     // DHRobotArm testArm = new DHRobotArm();
@@ -332,6 +374,19 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
   public Point publishTracking(Point tracking) {
     return tracking;
   }
+  
+
+  // input data from point publisher
+  public void onPoint(Point point) {
+    // TODO : move input matrix translation to here? or somewhere?
+    // TODO: also don't like that i'm going to just say take the first point
+    // now.
+    // TODO: points should probably be a map, each point should have a name ?
+    log.info("Attempting to move to {}", point);
+
+    // TODO: scale / translate & rotate...
+    moveTo(currentArm, point);
+  }
 
   @Override
   public void onPoints(List<Point> points) {
@@ -339,7 +394,7 @@ public class InverseKinematics3D extends Service implements IKJointAnglePublishe
     // TODO: also don't like that i'm going to just say take the first point
     // now.
     // TODO: points should probably be a map, each point should have a name ?
-    moveTo(points.get(0));
+    moveTo(currentArm, points.get(0));
   }
 
   public void onJoystickInput(JoystickData input) {

@@ -42,11 +42,17 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.KeyManagementException;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
@@ -58,8 +64,13 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
+import org.myrobotlab.logging.LoggerFactory;
+import org.slf4j.Logger;
+
 public class InstallCert {
 
+  public final static Logger log = LoggerFactory.getLogger(InstallCert.class);
+      
   private static class SavingTrustManager implements X509TrustManager {
 
     private final X509TrustManager tm;
@@ -89,20 +100,42 @@ public class InstallCert {
 
   private static final char[] HEXDIGITS = "0123456789abcdef".toCharArray();
 
-  public static void main(final String[] args) throws Exception {
+  public static void main(final String[] args) throws KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, IOException {
     String host;
     int port;
-    char[] passphrase;
     if ((args.length == 1) || (args.length == 2)) {
       final String[] c = args[0].split(":");
       host = c[0];
       port = (c.length == 1) ? 443 : Integer.parseInt(c[1]);
-      final String p = (args.length == 1) ? "changeit" : args[1];
-      passphrase = p.toCharArray();
+      final String pass = (args.length == 1) ? "changeit" : args[1];
+      install(host, port, pass);
     } else {
-      System.out.println("Usage: java InstallCert <host>[:port] [passphrase]");
+      log.error("Usage: java InstallCert <host>[:port] [passphrase]");
       return;
     }
+  }
+
+  public static void install(String urlstr) throws KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, IOException {
+    install(urlstr, null);
+  }
+  public static void install(String urlstr, String pass) throws KeyManagementException, NoSuchAlgorithmException, CertificateException, KeyStoreException, IOException {
+    URL url = new URL(urlstr);
+    install(url.getHost(), url.getPort(), pass);
+  }
+  
+  public static void install(String host, String inport, String pass) throws KeyManagementException, NumberFormatException, NoSuchAlgorithmException, CertificateException, KeyStoreException, IOException {
+    String port = (inport != null)?"443":inport;
+    install(host, Integer.parseInt(port), pass);
+  }
+  
+  public static void install(String host, Integer inport, String pass) throws NoSuchAlgorithmException, IOException, CertificateException, KeyStoreException, KeyManagementException {
+  
+    Integer port = (inport == null || inport == -1)?443:inport;
+    
+    char[] passphrase;
+    
+    final String p = (pass == null) ? "changeit" : pass;
+    passphrase = p.toCharArray();
 
     File file = new File("jssecacerts");
     if (file.isFile() == false) {
@@ -114,7 +147,7 @@ public class InstallCert {
       }
     }
 
-    System.out.println("Loading KeyStore " + file + "...");
+    log.info("Loading KeyStore " + file + "...");
     final InputStream in = new FileInputStream(file);
     final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(in, passphrase);
@@ -128,51 +161,47 @@ public class InstallCert {
     context.init(null, new TrustManager[] { tm }, null);
     final SSLSocketFactory factory = context.getSocketFactory();
 
-    System.out.println("Opening connection to " + host + ":" + port + "...");
+    log.info("Opening connection to " + host + ":" + port + "...");
     final SSLSocket socket = (SSLSocket) factory.createSocket(host, port);
     socket.setSoTimeout(10000);
     try {
-      System.out.println("Starting SSL handshake...");
+      log.info("Starting SSL handshake...");
       socket.startHandshake();
       socket.close();
-      System.out.println();
-      System.out.println("No errors, certificate is already trusted");
+      log.info("No errors, certificate is already trusted");
     } catch (final SSLException e) {
-      System.out.println();
-      e.printStackTrace(System.out);
+      log.info("Exception: ", e);
     }
 
     final X509Certificate[] chain = tm.chain;
     if (chain == null) {
-      System.out.println("Could not obtain server certificate chain");
+      log.info("Could not obtain server certificate chain");
       return;
     }
 
     final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
-    System.out.println();
-    System.out.println("Server sent " + chain.length + " certificate(s):");
-    System.out.println();
+    log.info("Server sent " + chain.length + " certificate(s):");
+
     final MessageDigest sha1 = MessageDigest.getInstance("SHA1");
     final MessageDigest md5 = MessageDigest.getInstance("MD5");
     for (int i = 0; i < chain.length; i++) {
       final X509Certificate cert = chain[i];
-      System.out.println(" " + (i + 1) + " Subject " + cert.getSubjectDN());
-      System.out.println("   Issuer  " + cert.getIssuerDN());
+      log.info(" " + (i + 1) + " Subject " + cert.getSubjectDN());
+      log.info("   Issuer  " + cert.getIssuerDN());
       sha1.update(cert.getEncoded());
-      System.out.println("   sha1    " + toHexString(sha1.digest()));
+      log.info("   sha1    " + toHexString(sha1.digest()));
       md5.update(cert.getEncoded());
-      System.out.println("   md5     " + toHexString(md5.digest()));
-      System.out.println();
+      log.info("   md5     " + toHexString(md5.digest()));
     }
 
-    System.out.println("Enter certificate to add to trusted keystore" + " or 'q' to quit: [1]");
+    log.info("Enter certificate to add to trusted keystore" + " or 'q' to quit: [1]");
     final String line = reader.readLine().trim();
     int k;
     try {
       k = (line.length() == 0) ? 0 : Integer.parseInt(line) - 1;
     } catch (final NumberFormatException e) {
-      System.out.println("KeyStore not changed");
+      log.info("KeyStore not changed");
       return;
     }
 
@@ -184,10 +213,8 @@ public class InstallCert {
     ks.store(out, passphrase);
     out.close();
 
-    System.out.println();
-    System.out.println(cert);
-    System.out.println();
-    System.out.println("Added certificate to keystore 'cacerts' using alias '" + alias + "'");
+    log.info("Cert: {}", cert);
+    log.info("Added certificate to keystore 'cacerts' using alias '" + alias + "'");
   }
 
   private static String toHexString(final byte[] bytes) {
@@ -200,4 +227,5 @@ public class InstallCert {
     }
     return sb.toString();
   }
+
 }

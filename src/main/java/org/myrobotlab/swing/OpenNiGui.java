@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -79,7 +79,6 @@ public class OpenNiGui extends ServiceGui implements ActionListener {
     recordButton.addActionListener(this);
     playbackButton.addActionListener(this);
 
-  
   }
 
   @Override
@@ -87,26 +86,26 @@ public class OpenNiGui extends ServiceGui implements ActionListener {
     Object o = e.getSource();
     if (o == captureButton) {
       if (captureButton.getText().equals("capture")) {
-        myService.send(boundServiceName, "capture");
+        swingGui.send(boundServiceName, "capture");
         captureButton.setText("stop capture");
       } else {
-        myService.send(boundServiceName, "stopCapture");
+        swingGui.send(boundServiceName, "stopCapture");
         captureButton.setText("capture");
       }
     } else if (o == recordButton) {
       if (recordButton.getText().equals("record")) {
-        myService.send(boundServiceName, "record");
+        swingGui.send(boundServiceName, "record");
         recordButton.setText("stop recording");
       } else {
-        myService.send(boundServiceName, "stopRecording");
+        swingGui.send(boundServiceName, "stopRecording");
         recordButton.setText("record");
       }
     } else if (o == playbackButton) {
       if (playbackButton.getText().equals("playback")) {
-        myService.send(boundServiceName, "playback");
+        swingGui.send(boundServiceName, "playback");
         playbackButton.setText("stop playback");
       } else {
-        myService.send(boundServiceName, "stopPlayback");
+        swingGui.send(boundServiceName, "stopPlayback");
         playbackButton.setText("playback");
       }
     }

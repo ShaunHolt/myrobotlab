@@ -4,10 +4,12 @@ import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
+
 /**
-*This class exists as a proxy to control native MRL services connected through the web API. 
-*Methods of that native service are called through this class's {@link #exec(String, Object[])} method.
-**/
+ * This class exists as a proxy to control native MRL services connected through
+ * the web API. Methods of that native service are called through this class's
+ * {@link #exec(String, Object[])} method.
+ **/
 public class GoogleAssistant extends PythonProxy {
 
   /**
@@ -15,12 +17,12 @@ public class GoogleAssistant extends PythonProxy {
    */
   private static final long serialVersionUID = 1L;
 
-  public GoogleAssistant(String n) {
-    super(n);
+  public GoogleAssistant(String n, String id) {
+    super(n, id);
   }
 
   public Object test(String testString) {
-	return exec("test", new Object[] {(Object) testString});
+    return exec("test", new Object[] { (Object) testString });
   }
 
   /**
@@ -36,28 +38,28 @@ public class GoogleAssistant extends PythonProxy {
     ServiceType meta = new ServiceType(GoogleAssistant.class.getCanonicalName());
     meta.addDescription("Access Google Assistant through voice interaction");
     meta.setAvailable(true); // false if you do not want it viewable in a gui
-    meta.addCategory("ai");
+    meta.addCategory("ai", "cloud");
     meta.setCloudService(true);
+    meta.setRequiresKeys(true);
     return PythonProxy.addMetaData(meta);
   }
 
   public void startService() {
-	super.startService();
-	start();
+    super.startService();
+    start();
   }
 
   public void start() {
-	exec("start", (Object[]) null);
+    exec("start", (Object[]) null);
   }
 
   public void stop() {
-	exec("stop", (Object[]) null);
+    exec("stop", (Object[]) null);
   }
 
-
-  //Required because of Java reflection weirdness
+  // Required because of Java reflection weirdness
   public void handshake() {
-	super.handshake();
+    super.handshake();
   }
 
   public static void main(String[] args) {

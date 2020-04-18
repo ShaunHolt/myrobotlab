@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -54,7 +54,7 @@ import org.slf4j.Logger;
  */
 @Deprecated // use Chassis
 public class MobilePlatform extends Service {
- 
+
   private static final long serialVersionUID = 1L;
   public final static Logger log = LoggerFactory.getLogger(MobilePlatform.class);
 
@@ -63,15 +63,15 @@ public class MobilePlatform extends Service {
   public int targetX = 0;
 
   public int targetY = 0;
-  
+
   public Double headingCurrent = 0.0;
   public Double headingTarget = 0.0;
   public Double headingLast = 0.0;
   public Double headingDelta = 0.0;
-  
+
   transient MotorControl left = null;
   transient MotorControl right = null;
-  
+
   // String directionTarget = null;
 
   // TODO - determine if control needs to be serialized
@@ -145,8 +145,8 @@ public class MobilePlatform extends Service {
 
   public boolean inMotion = false;
 
-  public MobilePlatform(String n) {
-    super(n);
+  public MobilePlatform(String n, String id) {
+    super(n, id);
   }
 
   public void attach(Motor left, Motor right) {
@@ -329,7 +329,6 @@ public class MobilePlatform extends Service {
     left.move(-power);
   }
 
-
   // from motor interface begin-------
   public void stop() {
     right.stop();
@@ -341,14 +340,13 @@ public class MobilePlatform extends Service {
     left.stopAndLock();
   }
 
-  
   // waitForHeadingChange will block and wait for heading change
   public final double waitForHeadingChange() {
     synchronized (lock) {
       try {
         lock.wait();
       } catch (InterruptedException e) {
-    	  log.info("lock interrupted");
+        log.info("lock interrupted");
       }
     }
 
@@ -373,7 +371,7 @@ public class MobilePlatform extends Service {
 
     return meta;
   }
-  
+
   public static void main(String[] args) {
     LoggingFactory.init(Level.INFO);
 

@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -68,6 +68,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
 
 import org.myrobotlab.framework.Platform;
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.Status;
@@ -86,6 +87,7 @@ import org.myrobotlab.service.SwingGui;
 import org.myrobotlab.swing.widget.ImageNameRenderer;
 import org.myrobotlab.swing.widget.PossibleServicesRenderer;
 import org.myrobotlab.swing.widget.ProgressDialog;
+import org.myrobotlab.swing.widget.StackTraceDialog;
 import org.slf4j.Logger;
 
 public class RuntimeGui extends ServiceGui implements ActionListener, ListSelectionListener, KeyListener {
@@ -280,7 +282,7 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
         int index = source.locationToIndex(e.getPoint());
         if (index >= 0) {
           releasedTarget = (ServiceInterface) source.getModel().getElementAt(index);
-          log.info(String.format("right click on running service %s", releasedTarget.getName()));
+          log.info("right click on running service {}", releasedTarget.getName());
           releaseMenuItem.setVisible(true);
           upgradeMenuItem.setVisible(false);
           installMenuItem.setVisible(false);
@@ -319,7 +321,9 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     releaseMenuItem.setIcon(Util.getScaledIcon(Util.getImage("release.png"), 0.50));
     popup.add(releaseMenuItem);
 
-    setTitle(myRuntime.getPlatform().toString());
+    Runtime runtime = Runtime.getInstance();
+
+    setTitle(String.format("%s %s", runtime.getPlatform().toString(), runtime.getLocaleTag()));
 
     JPanel flow = new JPanel();
     flow.add(createCategories());
@@ -379,27 +383,29 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     menuBar.add(logging);
 
     /*
-    JMenuItem item = new JMenuItem("check for updates");
-    item.addActionListener(this);
-    system.add(item);
-    */
+     * JMenuItem item = new JMenuItem("check for updates");
+     * item.addActionListener(this); system.add(item);
+     */
 
     JMenuItem item = new JMenuItem("install all");
     item.addActionListener(this);
     system.add(item);
-    
+
     item = new JMenuItem("record");
     item.addActionListener(this);
     system.add(item);
-    
+
     item = new JMenuItem("restart");
     item.addActionListener(this);
     system.add(item);
-    
-    item = new JMenuItem("exit");
+
+    item = new JMenuItem("stack traces");
     item.addActionListener(this);
     system.add(item);
 
+    item = new JMenuItem("exit");
+    item.addActionListener(this);
+    system.add(item);
 
     JMenu m1 = new JMenu("level");
     logging.add(m1);
@@ -415,7 +421,7 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     Object o = event.getSource();
 
     if (releaseMenuItem == o) {
-      myService.send(boundServiceName, "releaseService", releasedTarget.getName());
+      swingGui.send(boundServiceName, "releaseService", releasedTarget.getName());
       return;
     }
 
@@ -431,13 +437,13 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
       if (!repo.isServiceTypeInstalled(n)) {
         // dependencies needed !!!
         String msg = "<html>This Service has dependencies which are not yet loaded,<br>" + "do you wish to download them now?";
-        JOptionPane.setRootFrame(myService.getFrame());
-        int result = JOptionPane.showConfirmDialog(myService.getFrame(), msg, "alert", JOptionPane.OK_CANCEL_OPTION);
+        JOptionPane.setRootFrame(swingGui.getFrame());
+        int result = JOptionPane.showConfirmDialog(swingGui.getFrame(), msg, "alert", JOptionPane.OK_CANCEL_OPTION);
         if (result == JOptionPane.CANCEL_OPTION) {
           return;
         }
         // you say "install", i say "update", repo says "resolve"
-        myService.send(boundServiceName, "install", n);
+        swingGui.send(boundServiceName, "install", n);
       } else {
         // no unfulfilled dependencies - good to go
         addNewService(n);
@@ -451,26 +457,31 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     } else if ("install all".equals(cmd)) {
       send("install");
     } else if ("restart".equals(cmd)) {
-      Runtime.getInstance().restart();      
+      Runtime.getInstance().restart();
+    } else if ("stack traces".equals(cmd)) {
+      // TODO: render a dialog box with stack traces
+      new StackTraceDialog(this);
+
     } else if ("exit".equals(cmd)) {
       Runtime.shutdown();
     } else if ("check for updates".equals(cmd)) {
       send("checkForUpdates");
     } else if (cmd.equals(Level.DEBUG) || cmd.equals(Level.INFO) || cmd.equals(Level.WARN) || cmd.equals(Level.ERROR) || cmd.equals(Level.FATAL)) {
-      send("setLogLevel", cmd);/*
-      Logging logging = LoggingFactory.getInstance();
-      logging.setLevel(cmd);*/
-    } /*else if (cmd.equals(Appender.FILE)) {
-      Logging logging = LoggingFactory.getInstance();
-      logging.addAppender(Appender.FILE);
-    } else if (cmd.equals(Appender.CONSOLE)) {
-      Logging logging = LoggingFactory.getInstance();
-      logging.addAppender(Appender.CONSOLE);
-    } else if (cmd.equals(Appender.NONE)) {
-      Logging logging = LoggingFactory.getInstance();
-      logging.removeAllAppenders();
-
-    }*/ else {
+      send("setLogLevel",
+          cmd);/*
+                * Logging logging = LoggingFactory.getInstance();
+                * logging.setLevel(cmd);
+                */
+    } /*
+       * else if (cmd.equals(Appender.FILE)) { Logging logging =
+       * LoggingFactory.getInstance(); logging.addAppender(Appender.FILE); }
+       * else if (cmd.equals(Appender.CONSOLE)) { Logging logging =
+       * LoggingFactory.getInstance(); logging.addAppender(Appender.CONSOLE); }
+       * else if (cmd.equals(Appender.NONE)) { Logging logging =
+       * LoggingFactory.getInstance(); logging.removeAllAppenders();
+       * 
+       * }
+       */ else {
       log.error("unknown command " + cmd);
     }
 
@@ -484,7 +495,7 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     String name = JOptionPane.showInputDialog(frame, "new service name");
 
     if (name != null && name.length() > 0) {
-      myService.send(boundServiceName, "createAndStart", name, newService);
+      swingGui.send(boundServiceName, "createAndStart", name, newService);
 
     }
   }
@@ -505,7 +516,8 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     subscribe("registered");
     subscribe("released");
     subscribe("getSystemResources");
-    subscribe("publishInstallProgress");
+    // subscribe("publishInstallProgress");
+    // subscribe("publishStatus"); not needed one of two - auto-subscribed
   }
 
   @Override
@@ -513,7 +525,8 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     unsubscribe("registered");
     unsubscribe("released");
     subscribe("getSystemResources");
-    unsubscribe("publishInstallProgress");
+    // unsubscribe("publishInstallProgress");
+    // subscribe("publishStatus");
   }
 
   /**
@@ -674,7 +687,7 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
 
         // FIXME - change to "all" or "" - null is sloppy - system has
         // to upcast
-        myService.pack();
+        swingGui.pack();
       }
     });
   }
@@ -682,9 +695,9 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
   /*
    * new Service has been created list it..
    */
-  public ServiceInterface onRegistered(Service sw) {
-    currentServicesModel.addElement(sw);
-    return sw;
+  public ServiceInterface onRegistered(Registration r) {
+    currentServicesModel.addElement(r.service);
+    return r.service;
   }
 
   /*
@@ -703,15 +716,37 @@ public class RuntimeGui extends ServiceGui implements ActionListener, ListSelect
     send("shutdown");
   }
 
-  public void onInstallProgress(Status status) {
+  /**
+   * overridden - looking specifically for a key'd status to signal install
+   * progress dialog events
+   */
+  public void onStatus(Status status) {
+    SwingUtilities.invokeLater(new Runnable() {
+      @Override
+      public void run() {
+        // FIXME - infinite loop - what a mess :P
+        // self.onStatus(status); // super.onStatus - if Swing threading wasn't
+        // so
+        // silly
+        // inheritence is defeated by this anonymous runnable class :P
 
-    if (Repo.INSTALL_START.equals(status.key)) {
-      progressDialog.beginUpdates();
-    } else if (Repo.INSTALL_FINISHED.equals(status.key)) {
-      progressDialog.finished();
-    }
+        swingGui.setStatus(status);
 
-    progressDialog.addStatus(status);
+        if (Repo.INSTALL_START.equals(status.key)) {
+          progressDialog.beginUpdates();
+        }
+
+        if (Repo.INSTALL_FINISHED.equals(status.key)) {
+          progressDialog.finished();
+        }
+
+        // if (Repo.class.getSimpleName().equals(status.source)) {
+        progressDialog.addStatus(status); // "all status info coming from repo
+        // must have a source or key
+
+        // }
+      }
+    });
   }
 
   /**

@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -28,6 +28,7 @@ package org.myrobotlab.swing;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+
 import javax.swing.JButton;
 import javax.swing.SwingUtilities;
 
@@ -90,21 +91,21 @@ public class AudioCaptureGui extends ServiceGui {
 
     display.setLayout(new FlowLayout());
 
-  
   }
-  
-  public void onState(final AudioCapture audiocapture){
+
+  public void onState(final AudioCapture audiocapture) {
     SwingUtilities.invokeLater(new Runnable() {
       @Override
       public void run() {
 
-        if (AudioCapture.stopCapture) {
+        if (audiocapture.stopCapture) {
           captureBtn.setEnabled(true);
           stopBtn.setEnabled(false);
         } else {
           captureBtn.setEnabled(false);
           stopBtn.setEnabled(true);
         }
+        playBtn.setEnabled(audiocapture.soundCaptured);
       }
     });
   }
@@ -116,6 +117,5 @@ public class AudioCaptureGui extends ServiceGui {
   @Override
   public void unsubscribeGui() {
   }
-
 
 }

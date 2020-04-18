@@ -33,15 +33,15 @@ public class Pir extends Service implements PinListener {
     ServiceType meta = new ServiceType(Pir.class.getCanonicalName());
     meta.addDescription("PIR - Passive Infrared Sensor");
     meta.setAvailable(true); // false if you do not want it viewable in a
-    meta.addCategory("sensor");
+    meta.addCategory("sensors");
     return meta;
   }
 
   public static void main(String[] args) {
     try {
 
-      LoggingFactory.getInstance().configure();
-      LoggingFactory.getInstance().setLevel(Level.INFO);
+      LoggingFactory.init("info");
+
       Pir pir = (Pir) Runtime.start("pir", "Pir");
       Runtime.start("gui", "SwingGui");
       String arduinoPort = "COM4";
@@ -68,8 +68,8 @@ public class Pir extends Service implements PinListener {
   PinArrayControl pinControl;
   List<String> controllers;
 
-  public Pir(String n) {
-    super(n);
+  public Pir(String n, String id) {
+    super(n, id);
   }
 
   public void attach(PinArrayControl control, int pin) {
@@ -122,7 +122,7 @@ public class Pir extends Service implements PinListener {
 
   @Override
   public void onPin(PinData pindata) {
-    if (isVerbose){
+    if (isVerbose) {
       log.info("onPin {}", pindata);
     }
     boolean sense = (pindata.value != 0);

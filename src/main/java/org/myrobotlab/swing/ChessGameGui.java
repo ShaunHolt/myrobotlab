@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -76,7 +76,7 @@ public class ChessGameGui extends ServiceGui implements Constants, VetoableChang
       board.makeMove(best);
       searcher.board.makeMove(best);
       // showStatus("Computer move: " + best.toString());
-      gui.myService.send(boundServiceName, "computerMoved", best.toString());
+      gui.swingGui.send(boundServiceName, "computerMoved", best.toString());
 
       makeMove(best, true);
       chessView.switchMoveMarkers(board.side == LIGHT);
@@ -132,7 +132,6 @@ public class ChessGameGui extends ServiceGui implements Constants, VetoableChang
 
   public ChessGameGui(final String boundServiceName, final SwingGui myService) {
     super(boundServiceName, myService);
-
 
     // showStatus ("Please Wait; Program Loading");
     chessView = new ChessBoard();
@@ -207,12 +206,12 @@ public class ChessGameGui extends ServiceGui implements Constants, VetoableChang
 
     display.setSize(800, 600);
 
-  
   }
 
   @Override
   public void subscribeGui() {
-    subscribe("inputMove", "inputMove"); // FIXME - out of spec - should be onMove
+    subscribe("inputMove", "inputMove"); // FIXME - out of spec - should be
+    // onMove
     subscribe("inputHMove", "inputHMove");
   }
 
@@ -330,8 +329,8 @@ public class ChessGameGui extends ServiceGui implements Constants, VetoableChang
     // log.info(testFrom);
     // log.info(m + " from " + testFrom + " to " + to);
     if (publishEvent) {
-      myService.send(boundServiceName, "makeMove", m, "n");
-      myService.send(boundServiceName, "makeHMove", m);
+      swingGui.send(boundServiceName, "makeMove", m, "n");
+      swingGui.send(boundServiceName, "makeHMove", m);
     }
 
     if (m.promote != 0) {
@@ -439,8 +438,8 @@ public class ChessGameGui extends ServiceGui implements Constants, VetoableChang
       showStatus("Illegal move");
 
       HMove illegal = new HMove(move.getFrom(), move.getTo(), 0, 0, 'p');
-      myService.send(boundServiceName, "makeMove", illegal, "i");
-      myService.send(boundServiceName, "makeHMove", illegal);
+      swingGui.send(boundServiceName, "makeMove", illegal, "i");
+      swingGui.send(boundServiceName, "makeHMove", illegal);
 
       if (pce != null) {
         throw new PropertyVetoException("Illegal move", pce);

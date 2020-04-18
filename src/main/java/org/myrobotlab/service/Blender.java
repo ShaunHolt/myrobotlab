@@ -59,9 +59,9 @@ public class Blender extends Service {
 
           // JSONObject json = new JSONObject(in.readLine());
           String json = in.readLine();
-          log.info(String.format("%s", json));
+          log.info("{}", json);
           Message msg = gson.fromJson(json, Message.class);
-          log.info(String.format("msg %s", msg));
+          log.info("msg {}", msg);
           invoke(msg);
 
         }
@@ -84,10 +84,9 @@ public class Blender extends Service {
   public static final String SUCCESS = "SUCCESS";
   Socket control = null;
   transient ControlHandler controlHandler = null;
-  
+
   String host = "localhost";
   Integer controlPort = 8989;
-  
 
   Integer serialPort = 9191;
   String blenderVersion;
@@ -104,8 +103,8 @@ public class Blender extends Service {
 
   String expectedBlenderVersion = "0.9";
 
-  public Blender(String n) {
-    super(n);
+  public Blender(String n, String id) {
+    super(n, id);
   }
 
   /*
@@ -252,7 +251,7 @@ public class Blender extends Service {
   public void sendMsg(String method, Object... data) {
     if (isConnected()) {
       try {
-        Message msg = Message.createMessage(this, "Blender.py", method, data);
+        Message msg = Message.createMessage(getName(), "Blender.py", method, data);
         OutputStream out = control.getOutputStream();
         // FIXME - this encoder needs to
         // NOT PRETTY PRINT - delimiter is \n PRETY PRINT WILL BREAK IT !!!

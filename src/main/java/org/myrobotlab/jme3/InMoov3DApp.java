@@ -7,17 +7,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.myrobotlab.framework.Service;
-import org.myrobotlab.jme3.interfaces.IntegratedMovementInterface;
 import org.myrobotlab.kinematics.CollisionItem;
 import org.myrobotlab.kinematics.Map3DPoint;
 import org.myrobotlab.kinematics.Point;
-import org.myrobotlab.math.Mapper;
-import org.myrobotlab.service.Servo;
-import org.myrobotlab.service.Servo.IKData;
-import org.python.jline.internal.Log;
+import org.myrobotlab.logging.LoggerFactory;
+import org.myrobotlab.math.MapperLinear;
+import org.myrobotlab.math.interfaces.Mapper;
+import org.myrobotlab.service.interfaces.ServoControl;
+import org.myrobotlab.service.interfaces.ServoData;
+import org.slf4j.Logger;
 
 import com.jme3.app.SimpleApplication;
 import com.jme3.asset.plugins.FileLocator;
+import com.jme3.font.BitmapFont;
+import com.jme3.font.BitmapText;
 import com.jme3.input.KeyInput;
 import com.jme3.input.MouseInput;
 import com.jme3.input.controls.AnalogListener;
@@ -34,20 +37,20 @@ import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 import com.jme3.scene.shape.Box;
 import com.jme3.scene.shape.Cylinder;
-import com.jme3.system.AppSettings;
 import com.jme3.texture.Texture2D;
 import com.jme3.ui.Picture;
-import com.jme3.font.BitmapFont;
-import com.jme3.font.BitmapText;
 
 /**
  * @author Christian version 1.0.3
  */
 public class InMoov3DApp extends SimpleApplication implements IntegratedMovementInterface {
+  
+  transient public final static Logger log = LoggerFactory.getLogger(InMoov3DApp.class);
+
   private transient HashMap<String, Node> nodes = new HashMap<String, Node>();
-  private Queue<IKData> eventQueue = new ConcurrentLinkedQueue<IKData>();
+  private Queue<ServoData> eventQueue = new ConcurrentLinkedQueue<ServoData>();
   private transient HashMap<String, Node> servoToNode = new HashMap<String, Node>();
-  private HashMap<String, Mapper> maps = new HashMap<String, Mapper>();
+  private HashMap<String, Mapper> maps = new HashMap<>();
   private transient Service service = null;
   private transient Queue<Node> nodeQueue = new ConcurrentLinkedQueue<Node>();
   private transient Queue<BitmapText> bitmapTextQueue = new ConcurrentLinkedQueue<BitmapText>();
@@ -74,6 +77,9 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   protected Picture microOff;
   protected Picture battery[] = new Picture[101];
   protected Texture2D textureBat[] = new Texture2D[101];
+  private long startUpdateTs;
+  private long deltaMs;
+  private long sleepMs;
 
   public void setLeftArduinoConnected(boolean param) {
     leftArduinoConnected = param;
@@ -128,19 +134,6 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   }
   // end monitor
 
-  public static void main(String[] args) {
-    InMoov3DApp app = new InMoov3DApp();
-    AppSettings settings = new AppSettings(true);
-    settings.setResolution(1024, 960);
-    // settings.setEmulateMouse(false);
-    // settings.setUseJoysticks(false);
-    settings.setUseInput(false);
-    app.setSettings(settings);
-    app.setShowSettings(false);
-    app.setPauseOnLostFocus(false);
-    app.start();
-  }
-
   @Override
   public void simpleInitApp() {
     assetManager.registerLocator("InMoov/jm3/assets", FileLocator.class);
@@ -158,21 +151,21 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     inputManager.addMapping("MMouseDown", new MouseAxisTrigger(MouseInput.AXIS_WHEEL, true));
     inputManager.addListener(analogListener, "MMouseDown");
     inputManager.addMapping("Left", new KeyTrigger(KeyInput.KEY_A), new KeyTrigger(KeyInput.KEY_LEFT)); // A
-                                                                                                        // and
-                                                                                                        // left
-                                                                                                        // arrow
+    // and
+    // left
+    // arrow
     inputManager.addMapping("Right", new KeyTrigger(KeyInput.KEY_D), new KeyTrigger(KeyInput.KEY_RIGHT)); // D
-                                                                                                          // and
-                                                                                                          // right
-                                                                                                          // arrow
+    // and
+    // right
+    // arrow
     inputManager.addMapping("Up", new KeyTrigger(KeyInput.KEY_W), new KeyTrigger(KeyInput.KEY_UP)); // A
-                                                                                                    // and
-                                                                                                    // left
-                                                                                                    // arrow
+    // and
+    // left
+    // arrow
     inputManager.addMapping("Down", new KeyTrigger(KeyInput.KEY_S), new KeyTrigger(KeyInput.KEY_DOWN)); // D
-                                                                                                        // and
-                                                                                                        // right
-                                                                                                        // arrow
+    // and
+    // right
+    // arrow
     inputManager.addMapping("ZoomIn", new KeyTrigger(KeyInput.KEY_E));
     inputManager.addMapping("ZoomOut", new KeyTrigger(KeyInput.KEY_Q));
     inputManager.addListener(analogListener, new String[] { "Left", "Right", "Up", "Down", "ZoomIn", "ZoomOut" });
@@ -261,7 +254,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("mtorso", node);
-    maps.put("mtorso", new Mapper(0, 180, 120, 60));
+    maps.put("mtorso", new MapperLinear(0, 180, 120, 60));
 
     node = new Node("ttorso");
     parentNode = nodes.get("mtorso");
@@ -276,7 +269,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("ttorso", node);
-    maps.put("ttorso", new Mapper(0, 180, 80, 100));
+    maps.put("ttorso", new MapperLinear(0, 180, 80, 100));
 
     node = new Node("rightS");
     parentNode = nodes.get("ttorso");
@@ -304,7 +297,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     Vector3f angle = rotationMask.mult((float) Math.toRadians(6));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("Romoplate", node);
-    maps.put("Romoplate", new Mapper(0, 180, 10, 70));
+    maps.put("Romoplate", new MapperLinear(0, 180, 10, 70));
 
     node = new Node("Rshoulder");
     parentNode = nodes.get("Romoplate");
@@ -321,7 +314,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(-2));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("Rshoulder", node);
-    maps.put("Rshoulder", new Mapper(0, 180, 0, 180));
+    maps.put("Rshoulder", new MapperLinear(0, 180, 0, 180));
 
     node = new Node("Rrotate");
     parentNode = nodes.get("Rshoulder");
@@ -336,7 +329,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("Rrotate", node);
-    maps.put("Rrotate", new Mapper(0, 180, 40, 180));
+    maps.put("Rrotate", new MapperLinear(0, 180, 40, 180));
 
     node = new Node("Rbicep");
     parentNode = nodes.get("Rrotate");
@@ -354,7 +347,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.rotate(angle.x, angle.y, angle.z);
     // node.rotateUpTo(angle);
     nodes.put("Rbicep", node);
-    maps.put("Rbicep", new Mapper(0, 180, 5, 60));
+    maps.put("Rbicep", new MapperLinear(0, 180, 5, 60));
 
     node = new Node("leftS");
     parentNode = nodes.get("ttorso");
@@ -382,7 +375,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(4));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("omoplate", node);
-    maps.put("omoplate", new Mapper(0, 180, 10, 70));
+    maps.put("omoplate", new MapperLinear(0, 180, 10, 70));
 
     node = new Node("shoulder");
     parentNode = nodes.get("omoplate");
@@ -397,7 +390,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("shoulder", node);
-    maps.put("shoulder", new Mapper(0, 180, 0, 180));
+    maps.put("shoulder", new MapperLinear(0, 180, 0, 180));
 
     node = new Node("rotate");
     parentNode = nodes.get("shoulder");
@@ -412,7 +405,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("rotate", node);
-    maps.put("rotate", new Mapper(0, 180, 40, 180));
+    maps.put("rotate", new MapperLinear(0, 180, 40, 180));
 
     node = new Node("bicep");
     parentNode = nodes.get("rotate");
@@ -429,7 +422,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(27));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("bicep", node);
-    maps.put("bicep", new Mapper(0, 180, 5, 60));
+    maps.put("bicep", new MapperLinear(0, 180, 5, 60));
 
     node = new Node("RWrist");
     parentNode = nodes.get("Rbicep");
@@ -446,7 +439,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(-90));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("RWrist", node);
-    maps.put("RWrist", new Mapper(0, 180, 130, 40));
+    maps.put("RWrist", new MapperLinear(0, 180, 130, 40));
 
     node = new Node("LWrist");
     parentNode = nodes.get("bicep");
@@ -463,7 +456,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(-90));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("LWrist", node);
-    maps.put("LWrist", new Mapper(0, 180, 40, 130));
+    maps.put("LWrist", new MapperLinear(0, 180, 40, 130));
 
     node = new Node("neck");
     parentNode = nodes.get("ttorso");
@@ -478,7 +471,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("neck", node);
-    maps.put("neck", new Mapper(0, 180, 60, 110));
+    maps.put("neck", new MapperLinear(0, 180, 60, 110));
 
     node = new Node("rollNeck");
     parentNode = nodes.get("neck");
@@ -492,7 +485,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     angle = rotationMask.mult((float) Math.toRadians(2));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("rollNeck", node);
-    maps.put("rollNeck", new Mapper(0, 180, 60, 115));
+    maps.put("rollNeck", new MapperLinear(0, 180, 60, 115));
 
     node = new Node("head");
     parentNode = nodes.get("rollNeck");
@@ -507,7 +500,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
     nodes.put("head", node);
-    maps.put("head", new Mapper(0, 180, 150, 30));
+    maps.put("head", new MapperLinear(0, 180, 150, 30));
 
     node = new Node("jaw");
     parentNode = nodes.get("head");
@@ -521,10 +514,10 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_y", rotationMask.y);
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
-    angle = rotationMask.mult((float) Math.toRadians(5));
+    angle = rotationMask.mult((float) Math.toRadians(0));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("jaw", node);
-    maps.put("jaw", new Mapper(0, 180,-10, 5));
+    maps.put("jaw", new MapperLinear(0, 180, -10, 5));
 
     // poc monitor declaration
 
@@ -602,28 +595,31 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
 
   /*
    * 
-   * @param name
-   *          : name of the part
-   * @param modelPath
-   *          : path leading the the 3dmesh (null for no model)
-   * @param modelScale
-   *          : model will be scale to this parameter
-   * @param hookTo
-   *          : attach this part to the hook part (null to hook to the root)
-   * @param relativePosition
-   *          : position relative to the hook part
-   * @param rotationMask
-   *          : set Vector3f.UNIT_X, Vector3f.UNIT_Y, Vector3f.UNIT_Z) for the
-   *          axe of rotation
-   * @param initialAngle
-   *          : initial angle of rotation of the part (in radian)
+   * @param name : name of the part
+   * 
+   * @param modelPath : path leading the the 3dmesh (null for no model)
+   * 
+   * @param modelScale : model will be scale to this parameter
+   * 
+   * @param hookTo : attach this part to the hook part (null to hook to the
+   * root)
+   * 
+   * @param relativePosition : position relative to the hook part
+   * 
+   * @param rotationMask : set Vector3f.UNIT_X, Vector3f.UNIT_Y,
+   * Vector3f.UNIT_Z) for the axe of rotation
+   * 
+   * @param initialAngle : initial angle of rotation of the part (in radian)
    */
 
-  public void updatePosition(IKData event) {
+  public void updatePosition(ServoData event) {
     eventQueue.add(event);
   }
 
   public void simpleUpdate(float tpf) {
+    // start the clock on how much time we will take
+    startUpdateTs = System.currentTimeMillis();
+
     if (updateCollisionItem) {
       for (Node node : collisionItems) {
         if (node.getUserData("collisionItem") != null) {
@@ -635,7 +631,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     }
 
     while (eventQueue.size() > 0) {
-      IKData event = eventQueue.remove();
+      ServoData event = eventQueue.remove();
       if (servoToNode.containsKey(event.name)) {
         Node node = servoToNode.get(event.name);
         Vector3f rotMask = new Vector3f((float) node.getUserData("rotationMask_x"), (float) node.getUserData("rotationMask_y"), (float) node.getUserData("rotationMask_z"));
@@ -644,7 +640,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
         float rotation = (float) ((map.calcOutput(event.pos)) * Math.PI / 180 - currentAngle * Math.PI / 180);
         Vector3f angle = rotMask.mult((float) rotation);
         node.rotate(angle.x, angle.y, angle.z);
-        node.setUserData("currentAngle", (float) (map.calcOutput(event.pos)));
+        node.setUserData("currentAngle",  (map.calcOutput(event.pos)));
         servoToNode.put(event.name, node);
         nodes.put(node.getName(), node);
       }
@@ -725,26 +721,40 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
 
     }
 
+    // To achieve ~30 fps, the thread will need to sleep for 33ms otherwise the
+    // update thread races through this function without pause to generating
+    // 300+ fps.
+    // If this update takes deltaMs to process then we will subtract that from
+    // the initial 33ms,
+    // to make total time spent in this method as close to 33ms as possible.
+
+    deltaMs = System.currentTimeMillis() - startUpdateTs;
+    sleepMs = 33 - deltaMs;
+    try {
+      Thread.sleep(sleepMs);
+    } catch (Exception e) {
+    }
   }
 
-  // FIXME - race condition, if this method is called before JME is fully initialized :(
+  // FIXME - race condition, if this method is called before JME is fully
+  // initialized :(
   // the result is no servos are successfully added
-  public void addServo(String partName, Servo servo) {
+  public void addServo(String partName, ServoControl servo) {
     if (nodes.containsKey(partName)) {
       Node node = nodes.get(partName);
       Mapper map = maps.get(partName);
-      map.setMinMaxInput(servo.getMinInput(), servo.getMaxInput());
-      double angle = -map.calcOutput(servo.getRest()) + map.calcOutput(servo.getCurrentPos());
+      map.setMinMax(servo.getMin(), servo.getMax());
+      double angle = -map.calcOutput(servo.getRest()) + map.calcOutput(servo.getPos());
       angle *= Math.PI / 180;
       Vector3f rotMask = new Vector3f((float) node.getUserData("rotationMask_x"), (float) node.getUserData("rotationMask_y"), (float) node.getUserData("rotationMask_z"));
       Vector3f rotAngle = rotMask.mult((float) angle);
       node.rotate(rotAngle.x, rotAngle.y, rotAngle.z);
-      node.setUserData("currentAngle", (float) map.calcOutput(servo.getCurrentPos()));
+      node.setUserData("currentAngle", map.calcOutput(servo.getPos()));
       nodes.put(partName, node);
       servoToNode.put(servo.getName(), node);
       maps.put(partName, map);
     } else {
-      Log.info(partName + " is not a valid part name for VinMoov");
+      log.info(partName + " is not a valid part name for VinMoov");
     }
   }
 
@@ -847,10 +857,10 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   public void setMinMaxAngles(String partName, double min, double max) {
     if (maps.containsKey(partName)) {
       Mapper map = maps.get(partName);
-      map = new Mapper(map.getMinX(), map.getMaxX(), min, max);
+      map = new MapperLinear(map.getMinX(), map.getMaxX(), min, max);
       maps.put(partName, map);
     } else {
-      Log.info("No part named " + partName + " found");
+      log.info("No part named " + partName + " found");
     }
   }
 

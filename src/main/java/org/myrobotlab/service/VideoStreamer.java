@@ -28,7 +28,8 @@ import org.slf4j.Logger;
  * 
  */
 
-public class VideoStreamer extends AbstractVideoSink /*extends Service implements VideoSink*/ {
+public class VideoStreamer
+    extends AbstractVideoSink /* extends Service implements VideoSink */ {
 
   private static final long serialVersionUID = 1L;
 
@@ -42,8 +43,7 @@ public class VideoStreamer extends AbstractVideoSink /*extends Service implement
     try {
 
       VideoStreamer streamer = (VideoStreamer) Runtime.createAndStart("streamer", "VideoStreamer");
-      Vision opencv = (Vision) Runtime.createAndStart("opencv", "OpenCV");
-
+      OpenCV opencv = (OpenCV) Runtime.start("opencv", "OpenCV");
       // streamer.start();
       streamer.attach(opencv);
 
@@ -57,8 +57,8 @@ public class VideoStreamer extends AbstractVideoSink /*extends Service implement
     }
   }
 
-  public VideoStreamer(String name) {
-    super(name);
+  public VideoStreamer(String n, String id) {
+    super(n, id);
   }
 
   public void attach(String videoSource) {

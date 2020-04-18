@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -50,13 +50,12 @@ public class VideoWidget extends ServiceGui {
     // set initial default output
     addVideoDisplayPanel("output");
   }
-  
+
   public void setTitle(String t) {
     TitledBorder title;
     title = BorderFactory.createTitledBorder(t);
     display.setBorder(title);
   }
-  
 
   public VideoDisplayPanel addVideoDisplayPanel(String source) {
     return addVideoDisplayPanel(source, null);
@@ -73,7 +72,7 @@ public class VideoWidget extends ServiceGui {
     // gc.gridx = videoDisplayXPos;
     // gc.gridy = videoDisplayYPos;
 
-    VideoDisplayPanel vp = new VideoDisplayPanel(source, this, myService, boundServiceName);
+    VideoDisplayPanel vp = new VideoDisplayPanel(source, this, swingGui, boundServiceName);
 
     // add it to the map of displays
     displays.put(source, vp);
@@ -83,14 +82,14 @@ public class VideoWidget extends ServiceGui {
 
     ++videoDisplayXPos;
     display.invalidate();
-    myService.pack();
+    swingGui.pack();
 
     return vp;
   }
 
   @Override
   public void subscribeGui() {
-	// FIXME - should be to spec .. onDisplay no displayFrame
+    // FIXME - should be to spec .. onDisplay no displayFrame
     subscribe("publishDisplay", "displayFrame");
   }
 
@@ -139,7 +138,7 @@ public class VideoWidget extends ServiceGui {
     VideoDisplayPanel vdp = displays.remove(source);
     display.remove(vdp.myDisplay);
     display.invalidate();
-    myService.pack();
+    swingGui.pack();
   }
 
   public void allowFork(boolean b) {

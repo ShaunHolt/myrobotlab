@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -25,28 +25,27 @@
 
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.opencv_core.cvCreateImage;
-import static org.bytedeco.javacpp.opencv_core.cvGetSize;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_ADAPTIVE_THRESH_MEAN_C;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_BGR2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_THRESH_BINARY;
-import static org.bytedeco.javacpp.opencv_imgproc.cvAdaptiveThreshold;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCvtColor;
+import static org.bytedeco.opencv.global.opencv_core.cvCreateImage;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_ADAPTIVE_THRESH_MEAN_C;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_BGR2GRAY;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_THRESH_BINARY;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvAdaptiveThreshold;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCvtColor;
 
-import org.bytedeco.javacpp.opencv_core.IplImage;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+
+import org.bytedeco.opencv.opencv_core.IplImage;
 import org.myrobotlab.logging.LoggerFactory;
 import org.slf4j.Logger;
 
+// FIXME - add ui parameters
 public class OpenCVFilterAdaptiveThreshold extends OpenCVFilter {
 
   private static final long serialVersionUID = 1L;
-  public final static Logger log = LoggerFactory.getLogger(OpenCVFilterAdaptiveThreshold.class.getCanonicalName());
+  public final static Logger log = LoggerFactory.getLogger(OpenCVFilterAdaptiveThreshold.class);
 
   transient IplImage gray = null;
-
-  public OpenCVFilterAdaptiveThreshold() {
-    super();
-  }
 
   public OpenCVFilterAdaptiveThreshold(String name) {
     super(name);
@@ -85,11 +84,12 @@ public class OpenCVFilterAdaptiveThreshold extends OpenCVFilter {
 
   @Override
   public void imageChanged(IplImage image) {
-    gray = cvCreateImage(cvGetSize(image), 8, CV_THRESH_BINARY);
+    
+    gray = cvCreateImage(image.cvSize(), 8, CV_THRESH_BINARY);
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
+  public IplImage process(IplImage image) {
 
     // CV_THRESH_BINARY
     // CV_THRESH_BINARY_INV
@@ -107,6 +107,11 @@ public class OpenCVFilterAdaptiveThreshold extends OpenCVFilter {
     cvCvtColor(image, gray, CV_BGR2GRAY);
     cvAdaptiveThreshold(gray, gray, 255, CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY, 7, 30);
 
+    return gray;
+  }
+
+  @Override
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
     return image;
   }
 

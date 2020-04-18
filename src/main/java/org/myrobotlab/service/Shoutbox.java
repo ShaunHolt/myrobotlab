@@ -3,12 +3,16 @@ package org.myrobotlab.service;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.SimpleTimeZone;
 
 import org.jivesoftware.smack.SmackException.NotConnectedException;
 import org.jivesoftware.smack.XMPPException;
@@ -139,11 +143,15 @@ public class Shoutbox extends Service {
   transient FileWriter fw = null;
 
   transient BufferedWriter bw = null;
+  
+  transient protected SimpleDateFormat tsFormatter = new SimpleDateFormat("yyyyMMddHHmmssSSS");
 
+  transient protected Calendar cal = Calendar.getInstance(new SimpleTimeZone(0, "GMT"));
+  
   int maxArchiveRecordCount = 50;
 
-  public Shoutbox(String n) {
-    super(n);
+  public Shoutbox(String n, String id) {
+    super(n, id);
     chatbotNames.add("@mrt");
     chatbotNames.add("@mr.turing");
     chatbotNames.add("@mrturing");
@@ -191,7 +199,7 @@ public class Shoutbox extends Service {
     }
   }
 
-  private void chatWithChatbot(String foundName, Shout shout) {
+  private void chatWithChatbot(String foundName, Shout shout) throws IOException {
     // clean found name - we don't want to send @mrt etc to Alice 2.0
     String msg = shout.msg.replace(foundName, "");
     chatbot.getResponse(shout.from, msg);
@@ -226,6 +234,10 @@ public class Shoutbox extends Service {
   public void loadShouts() {
     try {
       File latest = null;
+      if (!new File(getName()).exists()) {
+        log.info("{} does not exist - will not load previous shouts", getName());
+        return;
+      }
       // restore the last file back into memory
       List<File> files = FindFile.find(getName(), "shouts.*.js", false, false);
 
@@ -291,7 +303,7 @@ public class Shoutbox extends Service {
   // FIXME FIXME FIXME - not normalized with publishShout(WebSocket) :PPPP
   // FIXME - must fill in your name - "Greg Perry" somewhere..
   public void onXMPPMsg(XmppMsg xmppMsg) {
-    log.info(String.format("Xmpp - %s %s", xmppMsg.from, xmppMsg.msg));
+    log.info("Xmpp - {} {}", xmppMsg.from, xmppMsg.msg);
 
     // not exactly the same model as onConnect - so we try to add each time
     String user = "me";// FIXME
@@ -330,8 +342,8 @@ public class Shoutbox extends Service {
   // EXCHANGE need "session-key" to do a - connection/session-key for user
   // FIXME NOT NORMALIZED with onXMPPMsg() !!!!
   // public void publishShout(WSMsg wsmsg) { is Message necessary here?
-  public Shout publishShout(Shout shout) throws NotConnectedException, XMPPException {
-    log.info(String.format("publishShout %s %s", shout.from, shout.msg));
+  public Shout publishShout(Shout shout) throws NotConnectedException, XMPPException, IOException {
+    log.info("publishShout {} {}", shout.from, shout.msg);
 
     String foundName = findChatBotName(shout.msg);
     if (foundName != null) {
@@ -342,7 +354,7 @@ public class Shoutbox extends Service {
     // Message out = createMessage("shoutclient", "publishShout",
     // CodecUtils.toJson(shout));
     // TODO: what do we do with the result of this method?
-    Message.createMessage(this, "shoutclient", "publishShout", CodecUtils.toJson(shout));
+    Message.createMessage(getName(), "shoutclient", "publishShout", CodecUtils.toJson(shout));
     // webgui.sendToAll(out);
 
     if (xmpp != null && !TYPE_SYSTEM.equals(shout.type)) {
@@ -352,8 +364,7 @@ public class Shoutbox extends Service {
         // don't echo to self
         // if (!key.startsWith(jabberID)) { filter took out mrt and
         // other activity !
-        log.info(String.format("sending from %s %s -> to xmpp client - relayName [%s] jabberID [%s] shout.msg [%s]", Thread.currentThread().getId(), shout.from, relayName,
-            jabberID, shout.msg));
+        log.info("sending from {} {} to xmpp client - relayName [{}] jabberID [{}] shout.msg [{}]", Thread.currentThread().getId(), shout.from, relayName, jabberID, shout.msg);
         xmpp.sendMessage(String.format("%s: %s", shout.from, shout.msg), jabberID);
         // }
       }
@@ -421,7 +432,7 @@ public class Shoutbox extends Service {
     String msgString = CodecUtils.toJson(shout);
     // TODO: do something with the "sendTo" message?
     // Message sendTo = createMessage("shoutclient", "publishShout", msgString);
-    Message.createMessage(this, "shoutclient", "publishShout", msgString);
+    Message.createMessage(getName(), "shoutclient", "publishShout", msgString);
 
   }
 
@@ -436,7 +447,7 @@ public class Shoutbox extends Service {
   }
 
   // TO PEER OR NOT TO PEER THAT IS THE QUESTION...
-  public void startChatBot() {
+  public void startChatBot() throws IOException {
     if (chatbot != null) {
       error("chatbot already started");
       return;
@@ -453,7 +464,7 @@ public class Shoutbox extends Service {
     try {
       // TODO FIGURE THIS OUT :P OATH ?
       String provider = "org.myrobotlab.client.DrupalNameProvider";
-      log.info(String.format("attempting to set name provider - %s", provider));
+      log.info("attempting to set name provider - {}", provider);
       setNameProvider(provider);
     } catch (Exception e) {
       error(e);
@@ -513,8 +524,6 @@ public class Shoutbox extends Service {
       shoutbox.createShout(TYPE_SYSTEM, "this is another test shout");
       shoutbox.createShout(TYPE_SYSTEM, "more test shouting");
 
-      Runtime.start("cli", "Cli");
-
       Runtime.start("webgui", "WebGui");
 
     } catch (Exception e) {
@@ -535,7 +544,7 @@ public class Shoutbox extends Service {
 
     ServiceType meta = new ServiceType(Shoutbox.class.getCanonicalName());
     meta.addDescription("shoutbox server");
-    meta.addCategory("connectivity");
+    meta.addCategory("cloud");
 
     return meta;
   }

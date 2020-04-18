@@ -10,11 +10,13 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
-import org.myrobotlab.framework.interfaces.Invoker;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
+import org.myrobotlab.math.MathUtils;
+import org.myrobotlab.service.AudioFile;
 import org.myrobotlab.service.data.AudioData;
 import org.slf4j.Logger;
 
@@ -35,39 +37,42 @@ public class AudioProcessor extends Thread {
   int currentTrackCount = 0;
   int samplesAdded = 0;
 
-  float volume = 1.0f;
+  double volume = 1.0f;
 
   float balance = 0.0f;
 
   float targetBalance = balance;
 
-  Invoker audioFile = null;
+  AudioFile audioFile = null;
 
-  public boolean isPlaying = false;
+  boolean isPlaying = false;
 
   boolean isRunning = false;
 
   public String track;
 
   BlockingQueue<AudioData> queue = new LinkedBlockingQueue<AudioData>();
-  
+
   AudioData currentAudioData = null;
 
   private int repeatCount;
-
-  public AudioProcessor(Invoker invoker, String track) {
+  
+  public AudioProcessor(AudioFile audioFile, String track) {
     super(String.format("%s:track", track));
-    this.audioFile = invoker;
+    this.audioFile = audioFile;
     this.track = track;
   }
-  
-  public AudioData pause(boolean b){
-    if (currentAudioData != null){
-      if (b){
-      currentAudioData.waitForLock = new Object();
+
+  public AudioData pause(boolean b) {
+    if (b) {
+      isPlaying = false;
+    }
+    if (currentAudioData != null) {
+      if (b) {
+        currentAudioData.waitForLock = new Object();
       } else {
-        if (currentAudioData.waitForLock != null){
-          synchronized(currentAudioData.waitForLock){
+        if (currentAudioData.waitForLock != null) {
+          synchronized (currentAudioData.waitForLock) {
             currentAudioData.waitForLock.notifyAll();
             currentAudioData.waitForLock = null; // removing reference
           }
@@ -81,18 +86,32 @@ public class AudioProcessor extends Thread {
   // FIXME - AudioData should have InputStream not File !
   public AudioData play(AudioData data) {
 
-    log.info(String.format("playing %s", data.toString()));
-
+    log.debug("playing {}", data.toString());
+    // FIXME - won't close filehandles :( .. dunno why
+    // FileInputStream fis = null;
+    // BufferedInputStream bis = null;
     AudioInputStream din = null;
     try {
 
-      File file = new File(data.uri);
-      if (file.length() == 0) {
-        // bail ?
-        log.error(String.format("audio file %s 0 byte length", file.getName()));
-        return data;
+      AudioInputStream in = null;
+
+      if (data.getFileName() != null) {
+        File file = new File(data.getFileName());
+        if (file.length() == 0) {
+          audioFile.error(String.format("audio file %s 0 byte length", file.getName()));
+          return data;
+        }
+        /*
+         * fis = new FileInputStream(file); bis = new BufferedInputStream(fis);
+         * in = AudioSystem.getAudioInputStream(bis);
+         */
+
+        in = AudioSystem.getAudioInputStream(file);
+
+      } else if (data.inputStream != null) {
+        in = AudioSystem.getAudioInputStream(data.inputStream);
       }
-      AudioInputStream in = AudioSystem.getAudioInputStream(file);
+
       AudioFormat baseFormat = in.getFormat();
       AudioFormat decodedFormat = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED, baseFormat.getSampleRate(), 16, baseFormat.getChannels(), baseFormat.getChannels() * 2,
           baseFormat.getSampleRate(), false);
@@ -100,7 +119,6 @@ public class AudioProcessor extends Thread {
       DataLine.Info info = new DataLine.Info(SourceDataLine.class, decodedFormat);
       SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
 
-      
       if (line != null) {
         line.open(decodedFormat);
         byte[] buffer = new byte[4096];
@@ -109,7 +127,7 @@ public class AudioProcessor extends Thread {
         line.start();
 
         int nBytesRead = 0;
-        
+
         isPlaying = true;
 
         audioFile.invoke("publishAudioStart", data);
@@ -131,21 +149,30 @@ public class AudioProcessor extends Thread {
             }
           }
 
-          if (data.volume != null && volume != data.volume) {
+          if (data.volume == null) {
+            data.volume = volume;
+          }
+
+          if (data.volume != null) {
 
             if (line.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
 
               FloatControl ctrl = (FloatControl) line.getControl(FloatControl.Type.MASTER_GAIN);
-             //  float scaled = (float) (Math.log(data.volume) / Math.log(10.0) * 20.0);
-              
-              ctrl.setValue((float)(ctrl.getMinimum() + ((double)(ctrl.getMaximum() - ctrl.getMinimum()) * data.volume)));
-              
-             //  volume.setValue(scaled);
+              // float scaled = (float) (Math.log(data.volume) / Math.log(10.0)
+              // * 20.0);
+
+              if (MathUtils.round(ctrl.getValue(), 3) != MathUtils.round((float) (ctrl.getMinimum() + ((double) (ctrl.getMaximum() - ctrl.getMinimum()) * data.volume)), 3)) {
+                if (data.volume <= 1.0f && data.volume >= 0) {
+
+                  ctrl.setValue((float) (ctrl.getMinimum() + ((double) (ctrl.getMaximum() - ctrl.getMinimum()) * data.volume)));
+                  log.debug("Audioprocessor set volume to : " + ctrl.getValue());
+                } else {
+                  log.error("Requested volume value " + data.volume.toString() + " not allowed");
+                  data.volume = 1.0;
+                }
+              }
+              // volume.setValue(scaled);
             }
-          }
-          
-          if (data.volume == null){
-            data.volume = volume;
           }
 
           if (balance != targetBalance) {
@@ -167,19 +194,30 @@ public class AudioProcessor extends Thread {
           // the buffer of raw data could be published from here
           // if a reference of the service is passed in
 
-          line.write(buffer, 0, nBytesRead);
+          if (audioFile.isMute()) {
+            // NoOp for a mute audioFile.
+          } else {
+            line.write(buffer, 0, nBytesRead);
+          }
 
         }
         // Stop
+
         line.drain();
         line.stop();
         line.close();
         din.close();
+        in.close();
+        /*
+         * if (bis != null) bis.close(); if (fis != null) fis.close();
+         */
+
+        // System.gc();
 
         audioFile.invoke("publishAudioEnd", data);
 
         synchronized (data) {
-          log.info("notifying others");
+          log.debug("notifying others");
           data.notifyAll();
         }
 
@@ -188,7 +226,14 @@ public class AudioProcessor extends Thread {
       }
 
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error(e.getMessage(), e);
+      if (audioFile != null) {
+    	if (e instanceof LineUnavailableException) {
+    		audioFile.error("line is not available");
+    	} else {
+    		audioFile.error("%s - %s", e.getMessage(), data.getFileName());
+    	}
+      }
     } finally {
       if (din != null) {
         try {
@@ -230,7 +275,7 @@ public class AudioProcessor extends Thread {
          * audioFile.getWaitForLock(waitForKey); synchronized (waitForLock) {
          * waitForLock.wait(); } }
          */
-        
+
         play(data);
         ++repeatCount;
 
@@ -242,7 +287,7 @@ public class AudioProcessor extends Thread {
          * waitForLock = audioFile.getWaitForLock(key); if (waitForLock != null)
          * { synchronized (waitForLock) { waitForLock.notify(); } } }
          */
-        
+
         data.stopTs = System.currentTimeMillis();
 
       }
@@ -250,26 +295,28 @@ public class AudioProcessor extends Thread {
       isRunning = false;
     }
     // default waits on queued audio requests
-
+    log.info("audio processor {} exiting", getName());
   }
 
-  public void setVolume(float volume) {
+  public void setVolume(double volume) {
     this.volume = volume;
   }
 
-  public static void main(String[] args) {
-    /*
-     * AudioPlayer player = new AudioPlayer();
-     * 
-     * // jlp.play("NeroSoundTrax_test1_PCM_Stereo_CBR_16SS_6000Hz.wav");
-     * AudioData data = new AudioData("aaa.mp3"); // data.volume = 120.0f;
-     * data.balance = -1;
-     * 
-     * player.play(data);
-     */
-  }
+  /*
+   * <pre> public static void main(String[] args) {
+   * 
+   * AudioPlayer player = new AudioPlayer();
+   * 
+   * // jlp.play("NeroSoundTrax_test1_PCM_Stereo_CBR_16SS_6000Hz.wav");
+   * AudioData data = new AudioData("aaa.mp3"); // data.volume = 120.0f;
+   * data.balance = -1;
+   * 
+   * player.play(data);
+   * 
+   * } </pre>
+   */
 
-  public float getVolume() {
+  public double getVolume() {
     return volume;
   }
 
@@ -286,10 +333,15 @@ public class AudioProcessor extends Thread {
   /**
    * number of samples currently queued to be played
    * 
-   * @return
+   * @return - number of queued samples
    */
   public int getTrackSize() {
     return queue.size();
+  }
+
+  public void stopPlaying() {
+    isPlaying = false;
+    isRunning = false;
   }
 
 }

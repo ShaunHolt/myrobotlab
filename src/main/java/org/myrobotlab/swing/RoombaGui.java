@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -82,10 +82,14 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
   Roomba roombacomm; // in MRL'land can't have direct access to this - must
   // message it
 
-  /** Returns an ImageIcon, or null if the path was invalid. */
+  /**
+   * Returns an ImageIcon, or null if the path was invalid.
+   * @param path - path to the location of the image
+   * @param description - description of the image
+   * @return the image
+   */
   protected static ImageIcon createImageIcon(String path, String description) {
-
-    return Util.getImageIcon("Roomba/" + path);
+    return Util.getImageIcon("Roomba/" + path, description);
   }
 
   public RoombaGui(final String boundServiceName, final SwingGui myService) {
@@ -207,14 +211,14 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
 
     connectButton.setText("connecting");
     try {
-    	roombacomm.connect(portname);
-    } catch(Exception e){
-    	log.error("could not connect", e);
-    	updateDisplay("Couldn't connect to " + portname + "\n");
-        connectButton.setText("  connect  ");
-        return false;
+      roombacomm.connect(portname);
+    } catch (Exception e) {
+      log.error("could not connect", e);
+      updateDisplay("Couldn't connect to " + portname + "\n");
+      connectButton.setText("  connect  ");
+      return false;
     }
-    
+
     updateDisplay("Roomba startup\n");
 
     roombacomm.startup();
@@ -254,7 +258,6 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
     }
 
   }
-
 
   /** Handle the key pressed event from the text field. */
   @Override
@@ -299,8 +302,8 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
   }
 
   /**
-     *
-     */
+   *
+   */
   void makeButtonPanel() {
     buttonPanel = new JPanel(new GridLayout(8, 2));
     buttonPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Commands"), BorderFactory.createEmptyBorder(5, 5, 5, 5)));
@@ -359,8 +362,8 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
   }
 
   /** 
-     * 
-     */
+   * 
+   */
   void makeCtrlPanel() {
     JPanel ctrlPanel1 = new JPanel(new GridLayout(3, 3));
 
@@ -416,8 +419,8 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
   }
 
   /**
-     *
-     */
+   *
+   */
   void makeDisplayPanel() {
     displayPanel = new JPanel();
     displayPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createTitledBorder("Display"), BorderFactory.createEmptyBorder(1, 1, 1, 1)));
@@ -433,8 +436,8 @@ public class RoombaGui extends ServiceGui implements ListSelectionListener, Acti
   }
 
   /**
-     *
-     */
+   *
+   */
   void makePanels() {
     makeSelectPanel();
     display.add(selectPanel, BorderLayout.NORTH);

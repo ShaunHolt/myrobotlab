@@ -41,7 +41,7 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
   private Integer trigPin = null;
   private Integer echoPin = null;
-  private String type = "SR04";
+  private String SensorType = "SR04";
 
   private Double lastRaw;
   private Double lastRange;
@@ -61,8 +61,8 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
   long timeout = 500;
 
-  public UltrasonicSensor(String n) {
-    super(n);
+  public UltrasonicSensor(String n, String id) {
+    super(n, id);
   }
 
   // ---- part of interfaces begin -----
@@ -135,7 +135,7 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
   @Override
   public void onRange(Double range) {
-    log.info(String.format("RANGE: %d", range));
+    log.info("RANGE: {}", range);
   }
 
   public Double publishRange(Double range) {
@@ -150,7 +150,7 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
   public boolean setType(String type) {
     if (types.contains(type)) {
-      this.type = type;
+      this.SensorType = type;
       return true;
     }
     return false;
@@ -210,7 +210,7 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
     ServiceType meta = new ServiceType(UltrasonicSensor.class.getCanonicalName());
     meta.addDescription("ranging sensor");
-    meta.addCategory("sensor");
+    meta.addCategory("sensors");
     meta.addPeer("controller", "Arduino", "default sensor controller will be an Arduino");
     return meta;
   }
@@ -219,8 +219,8 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
     return pings;
   }
 
-  public String getType() {
-    return type;
+  public String getSensorType() {
+    return SensorType;
   }
 
   // TODO - this could be Java 8 default interface implementation
@@ -309,15 +309,15 @@ public class UltrasonicSensor extends Service implements RangeListener, RangePub
 
       Servo servo = (Servo) Runtime.start("servo", "Servo");
       servo.attach(arduino, 6);
-      servo.moveTo(30);
+      servo.moveTo(30.0);
 
       srf04.startRanging();
 
       for (int i = 0; i < 100; ++i) {
-        servo.moveTo(30);
-        servo.moveTo(160);
-        servo.moveTo(10);
-        servo.moveTo(180);
+        servo.moveTo(30.0);
+        servo.moveTo(160.0);
+        servo.moveTo(10.0);
+        servo.moveTo(180.0);
       }
 
       arduino.setDebug(false);

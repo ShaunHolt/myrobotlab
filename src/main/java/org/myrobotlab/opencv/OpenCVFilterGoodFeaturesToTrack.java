@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -25,28 +25,26 @@
 
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.opencv_core.cvCreateImage;
-import static org.bytedeco.javacpp.opencv_core.cvGetSize;
-import static org.bytedeco.javacpp.opencv_core.cvPoint;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_BGR2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCircle;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCvtColor;
-import static org.bytedeco.javacpp.opencv_imgproc.cvGoodFeaturesToTrack;
-import static org.bytedeco.javacpp.opencv_imgproc.cvPutText;
+import static org.bytedeco.opencv.global.opencv_core.cvCreateImage;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_BGR2GRAY;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCvtColor;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvGoodFeaturesToTrack;
 
 import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 
 import org.bytedeco.javacpp.IntPointer;
-import org.bytedeco.javacpp.opencv_core.CvPoint2D32f;
-import org.bytedeco.javacpp.opencv_core.CvScalar;
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.bytedeco.javacpp.opencv_imgproc.CvFont;
+import org.bytedeco.opencv.opencv_core.CvPoint2D32f;
+import org.bytedeco.opencv.opencv_core.CvScalar;
+import org.bytedeco.opencv.opencv_core.IplImage;
+import org.bytedeco.opencv.opencv_imgproc.CvFont;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.service.data.Point2Df;
+import org.myrobotlab.math.geometry.Point2df;
 import org.slf4j.Logger;
 
 import com.sun.jna.ptr.IntByReference;
@@ -81,7 +79,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
   // Free parameter of Harris detector; used only if useHarris != 0
   public double k = 0.0;
 
-  public Point2Df oldest = new Point2Df();
+  public Point2df oldest = new Point2df();
 
   public HashMap<String, Integer> stableIterations;
 
@@ -96,7 +94,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
 
   DecimalFormat df = new DecimalFormat("0.###");
 
-  transient CvScalar color = new CvScalar();
+  transient Color color = null;
 
   transient CvFont font = new CvFont(CV_FONT_HERSHEY_PLAIN);
 
@@ -109,7 +107,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
   }
 
   @Override
-  public IplImage display(IplImage frame, OpenCVData data) {
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
 
     float gradient = 1 / oldest.value;
     int x, y;
@@ -129,7 +127,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
           float scale = (values.get(String.format("%d.%d", x, y)) * (gradient));
           if (scale == 1.0f) // grey
           {
-            color = CvScalar.WHITE;
+            color = Color.WHITE;
             // TODO - find what this is color
 
           } else {
@@ -137,15 +135,14 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
             // color.setVal(3, scale*10);
             Color c = Color.getHSBColor(scale, 1.0f, 0.8f);
 
-            color.red(c.getRed());
-            color.blue(c.getBlue());
-            color.green(c.getGreen());
+            color = new Color(c.getRed(), c.getBlue(), c.getGreen());
             // graphics.setColor(new Color(Color.HSBtoRGB(scale,
             // 0.8f, 0.7f)));
             // CV_HSV2RGB(scale);
           }
-          cvCircle(frame, cvPoint(x, y), 1, color, -1, 8, 0);
-          cvPutText(frame, String.format("%s", df.format(scale)), cvPoint(x, y), font, color);
+          graphics.setColor(color);
+          graphics.drawOval(x, y, 10, 10);
+          graphics.drawString(String.format("%s", df.format(scale)), x, y);
 
         } else {
           log.error(key); // FIXME FIXME FIXME ---- WHY THIS SHOULDN"T
@@ -156,25 +153,22 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
       // graphics.drawOval(x, y, 3, 1);
     }
 
-    return frame; // TODO - ran out of memory here
-
+    return image;
   }
 
   @Override
   public void imageChanged(IplImage image) {
-    grey = cvCreateImage(cvGetSize(image), 8, 1);
-    eig = cvCreateImage(cvGetSize(grey), 32, 1);
-    temp = cvCreateImage(cvGetSize(grey), 32, 1);
-
+    grey = cvCreateImage(image.cvSize(), 8, 1);
+    eig = cvCreateImage(grey.cvSize(), 32, 1);
+    temp = cvCreateImage(grey.cvSize(), 32, 1);
     stableIterations = new HashMap<String, Integer>();
-
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
+  public IplImage process(IplImage image) {
 
     if (channels == 3) {
-      grey = IplImage.create(imageSize, 8, 1);
+      grey = IplImage.create(image.cvSize(), 8, 1);
       cvCvtColor(image, grey, CV_BGR2GRAY);
     } else {
       grey = image;
@@ -195,7 +189,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
     cvGoodFeaturesToTrack(grey, eig, temp, corners, countPointer, qualityLevel, minDistance, mask, blockSize, useHarris, k);
 
     // FIXME - another sad data conversion :(
-    ArrayList<Point2Df> points = new ArrayList<Point2Df>();
+    ArrayList<Point2df> points = new ArrayList<Point2df>();
     Float value = null;
     int x, y;
     for (int i = 0; i < count[0]; ++i) {
@@ -217,13 +211,9 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
         values.put(key, value);
       }
 
-      Point2Df np = null;
+      Point2df np = null;
 
-      if (useFloatValues) {
-        np = new Point2Df((float) x / width, (float) y / height, value);
-      } else {
-        np = new Point2Df(x, y, value);
-      }
+      np = new Point2df(x, y, value);
 
       if (np.value > oldest.value) {
         oldest = np;
@@ -233,7 +223,7 @@ public class OpenCVFilterGoodFeaturesToTrack extends OpenCVFilter {
 
     }
 
-    data.set(points);
+    put("points", points);
 
     return image;
   }

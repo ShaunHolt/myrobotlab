@@ -1,30 +1,32 @@
 package org.myrobotlab.codec;
 
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.codec.binary.Base64;
 import org.myrobotlab.framework.MRLListener;
 import org.myrobotlab.framework.Message;
+import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.logging.Logging;
+import org.myrobotlab.logging.LoggingFactory;
 import org.slf4j.Logger;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.internal.LinkedTreeMap;
 
 /**
  * handles all encoding and decoding of MRL messages or api(s) assumed context -
@@ -42,30 +44,29 @@ import com.google.gson.GsonBuilder;
 public class CodecUtils {
 
   public final static Logger log = LoggerFactory.getLogger(CodecUtils.class);
+  
+  public static class ApiDescription {
+    String key;
+    String path; // {scheme}://{host}:{port}/api/messages
+    String exampleUri;
+    String description;
 
-  // uri schemes
-  public final static String SCHEME_MRL = "mrl";
-
-  public final static String SCHEME_BASE64 = "base64";
-
-  // TODO change to mime-type
-  public final static String TYPE_MESSAGES = "messages";
-  public final static String TYPE_JSON = "json";
-  public final static String TYPE_URI = "uri";
+    public ApiDescription(String key, String uriDescription, String exampleUri, String description) {
+      this.key = key;
+      this.path = uriDescription;
+      this.exampleUri = exampleUri;
+      this.description = description;
+    }
+  }
+  
+  public final static String PARAMETER_API = "/api/";
+  public final static String PREFIX_API = "api";
 
   // mime-types
-  // public final static String MIME_TYPE_JSON = "application/json";
-  // public final static String MIME_TYPE_MRL_JSON = "application/mrl-json";
   public final static String MIME_TYPE_JSON = "application/json";
 
-  // disableHtmlEscaping to prevent encoding or "=" -
-  // private transient static Gson gson = new
-  // GsonBuilder().setDateFormat("yyyy-MM-dd
-  // HH:mm:ss.SSS").setPrettyPrinting().disableHtmlEscaping().create();
-  private transient static Gson gson = new GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss.SSS").setPrettyPrinting().disableHtmlEscaping().create();
-  // FIXME - switch to Jackson
-
-  private static boolean initialized = false;
+  private transient static Gson gson = new GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss.SSS").disableHtmlEscaping().create();
+  private transient static Gson prettyGson = new GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss.SSS").setPrettyPrinting().disableHtmlEscaping().create();
 
   public final static String makeFullTypeName(String type) {
     if (type == null) {
@@ -84,6 +85,7 @@ public class CodecUtils {
       Arrays.asList(Boolean.class.getCanonicalName(), Character.class.getCanonicalName(), Byte.class.getCanonicalName(), Short.class.getCanonicalName(),
           Integer.class.getCanonicalName(), Long.class.getCanonicalName(), Float.class.getCanonicalName(), Double.class.getCanonicalName(), Void.class.getCanonicalName()));
 
+  @Deprecated /* use MethodCache */
   final static HashMap<String, Method> methodCache = new HashMap<String, Method>();
 
   /**
@@ -97,30 +99,44 @@ public class CodecUtils {
 
   final static HashSet<String> objectsCached = new HashSet<String>();
 
-  final static HashMap<String, String> keyToMimeType = new HashMap<String, String>();
-
-  public static final Message base64ToMsg(String base64) {
-    String data = base64;
-    if (base64.startsWith(String.format("%s://", SCHEME_BASE64))) {
-      data = base64.substring(SCHEME_BASE64.length() + 3);
-    }
-    final ByteArrayInputStream dataStream = new ByteArrayInputStream(Base64.decodeBase64(data));
-    try {
-      final ObjectInputStream objectStream = new ObjectInputStream(dataStream);
-      Message msg = (Message) objectStream.readObject();
-      return msg;
-    } catch (Exception e) {
-      Logging.logError(e);
-      return null;
-    }
-  }
-
   public static final String capitalize(final String line) {
     return Character.toUpperCase(line.charAt(0)) + line.substring(1);
   }
 
   public final static <T extends Object> T fromJson(String json, Class<T> clazz) {
     return gson.fromJson(json, clazz);
+  }
+
+  public final static <T extends Object> T fromJson(String json, Class<?> generic, Class<?>... parameterized) {
+    return gson.fromJson(json, getType(generic, parameterized));
+  }
+
+  public final static <T extends Object> T fromJson(String json, Type type) {
+    return gson.fromJson(json, type);
+  }
+  
+  public final static LinkedTreeMap<String,Object> toTree(String json) {
+    return gson.fromJson(json, LinkedTreeMap.class);
+  }
+
+  public static Type getType(final Class<?> rawClass, final Class<?>... parameterClasses) {
+    return new ParameterizedType() {
+      @Override
+      public Type[] getActualTypeArguments() {
+        return parameterClasses;
+      }
+
+      @Override
+      public Type getRawType() {
+        return rawClass;
+      }
+
+      @Override
+      public Type getOwnerType() {
+        return null;
+      }
+
+    };
   }
 
   static public final byte[] getBytes(Object o) throws IOException {
@@ -132,7 +148,7 @@ public class CodecUtils {
     return byteStream.toByteArray();
   }
 
-  static public final String getCallBackName(String topicMethod) {
+  static public final String getCallbackTopicName(String topicMethod) {
     // replacements
     if (topicMethod.startsWith("publish")) {
       return String.format("on%s", capitalize(topicMethod.substring("publish".length())));
@@ -145,42 +161,15 @@ public class CodecUtils {
     return String.format("on%s", capitalize(topicMethod));
   }
 
-  // concentrator data coming from decoder
-  static public Method getMethod(String serviceType, String methodName, Object[] params) {
-    return getMethod("org.myrobotlab.service", serviceType, methodName, params);
-  }
-
-  // real encoded data ??? getMethodFromXML getMethodFromJson - all resolve to
-  // this getMethod with class form
-  // encoded data.. YA !
-  static public Method getMethod(String pkgName, String objectName, String methodName, Object[] params) {
-    String fullObjectName = String.format("%s.%s", pkgName, objectName);
-    log.debug("Full Object Name : {}", fullObjectName);
-    return null;
-  }
-
-  static public ArrayList<Method> getMethodCandidates(String serviceType, String methodName, int paramCount) {
-    if (!objectsCached.contains(serviceType)) {
-      loadObjectCache(serviceType);
-    }
-
-    String ordinalKey = makeMethodOrdinalKey(serviceType, methodName, paramCount);
-    if (!methodOrdinal.containsKey(ordinalKey)) {
-      log.error(String.format("cant find matching method candidate for %s.%s %d params", serviceType, methodName, paramCount));
-      return null;
-    }
-    return methodOrdinal.get(ordinalKey);
-  }
-
   // TODO
   // public static Object encode(Object, encoding) - dispatches appropriately
 
   static final public String getMsgKey(Message msg) {
-    return String.format("msg %s.%s --> %s.%s(%s) - %d", msg.sender, msg.sendingMethod, msg.name, msg.method, CodecUtils.getParameterSignature(msg.data), msg.msgId);
-  }
-
-  static final public String getMsgTypeKey(Message msg) {
-    return String.format("msg %s.%s --> %s.%s(%s)", msg.sender, msg.sendingMethod, msg.name, msg.method, CodecUtils.getParameterSignature(msg.data));
+    if (msg.sendingMethod != null) {
+      return String.format("%s.%s --> %s.%s(%s) - %d", msg.sender, msg.sendingMethod, msg.name, msg.method, CodecUtils.getParameterSignature(msg.data), msg.msgId);
+    } else {
+      return String.format("%s --> %s.%s(%s) - %d", msg.sender, msg.name, msg.method, CodecUtils.getParameterSignature(msg.data), msg.msgId);
+    }
   }
 
   static final public String getParameterSignature(final Object[] data) {
@@ -232,7 +221,9 @@ public class CodecUtils {
    * most lossy protocols need conversion of parameters into correctly typed
    * elements this method is used to query a candidate method to see if a simple
    * conversion is possible
-   * @param clazz the class
+   * 
+   * @param clazz
+   *          the class
    * @return true/false
    */
   public static boolean isSimpleType(Class<?> clazz) {
@@ -246,95 +237,7 @@ public class CodecUtils {
   public static boolean isWrapper(String className) {
     return WRAPPER_TYPES_CANONICAL.contains(className);
   }
-
-  // FIXME - axis's Method cache - loads only requested methods
-  // this would probably be more gracefull than batch loading as I am doing..
-  // http://svn.apache.org/repos/asf/webservices/axis/tags/Version1_2RC2/java/src/org/apache/axis/utils/cache/MethodCache.java
-  static public void loadObjectCache(String serviceType) {
-    try {
-      objectsCached.add(serviceType);
-      Class<?> clazz = Class.forName(serviceType);
-      Method[] methods = clazz.getMethods();
-      for (int i = 0; i < methods.length; ++i) {
-        Method m = methods[i];
-        Class<?>[] types = m.getParameterTypes();
-
-        String ordinalKey = makeMethodOrdinalKey(serviceType, m.getName(), types.length);
-        String methodKey = makeMethodKey(serviceType, m.getName(), types);
-
-        if (!methodOrdinal.containsKey(ordinalKey)) {
-          ArrayList<Method> keys = new ArrayList<Method>();
-          keys.add(m);
-          methodOrdinal.put(ordinalKey, keys);
-        } else {
-          methodOrdinal.get(ordinalKey).add(m);
-        }
-
-        if (log.isDebugEnabled()) {
-          log.debug(String.format("loading %s into method cache", methodKey));
-        }
-        methodCache.put(methodKey, m);
-      }
-    } catch (Exception e) {
-      Logging.logError(e);
-    }
-  }
-
-  // FIXME !!! - encoding for Message ----> makeMethodKey(Message msg)
-
-  static public String makeMethodKey(String fullObjectName, String methodName, Class<?>[] paramTypes) {
-    StringBuffer sb = new StringBuffer();
-    for (int i = 0; i < paramTypes.length; ++i) {
-      sb.append("/");
-      sb.append(paramTypes[i].getCanonicalName());
-    }
-    return String.format("%s/%s%s", fullObjectName, methodName, sb.toString());
-  }
-
-  static public String makeMethodOrdinalKey(String fullObjectName, String methodName, int paramCount) {
-    return String.format("%s/%s/%d", fullObjectName, methodName, paramCount);
-  }
-
-  // LOSSY Encoding (e.g. xml &amp; gson - which do not encode type information)
-  // can possibly
-  // give us the parameter count - from the parameter count we can grab method
-  // candidates
-  // @return is a arraylist of keys !!!
-
-  public static final String msgToBase64(Message msg) {
-    final ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
-    try {
-      final ObjectOutputStream objectStream = new ObjectOutputStream(dataStream);
-      objectStream.writeObject(msg);
-      objectStream.close();
-      dataStream.close();
-      String base64 = String.format("%s://%s", SCHEME_BASE64, new String(Base64.encodeBase64(dataStream.toByteArray())));
-      return base64;
-    } catch (Exception e) {
-      log.error(String.format("couldnt seralize %s", msg));
-      Logging.logError(e);
-      return null;
-    }
-  }
-
-  public static String msgToGson(Message msg) {
-    return gson.toJson(msg, Message.class);
-  }
-
-  public static boolean setJSONPrettyPrinting(boolean b) {
-    if (b) {
-      gson = new GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss.SSS").setPrettyPrinting().disableHtmlEscaping().create();
-    } else {
-      gson = new GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss.SSS").disableHtmlEscaping().create();
-    }
-    return b;
-  }
-
-  // --- xml codec begin ------------------
-  // inbound parameters are probably strings or xml bits encoded in some way -
-  // need to match
-  // ordinal first
-
+  
   static public String toCamelCase(String s) {
     String[] parts = s.split("_");
     String camelCaseString = "";
@@ -350,6 +253,13 @@ public class CodecUtils {
 
   public final static String toJson(Object o) {
     return gson.toJson(o);
+  }
+
+  static public void toJson(OutputStream out, Object obj) throws IOException {
+    String json = null;
+    json = gson.toJson(obj);
+    if (json != null)
+      out.write(json.getBytes());
   }
 
   public final static String toJson(Object o, Class<?> clazz) {
@@ -413,50 +323,210 @@ public class CodecUtils {
     return String.format("org.myrobotlab.service.%s", type);
   }
 
-  static final String JSON = "application/javascript";  
+  static final String JSON = "application/javascript";
 
-  // start fresh :P
-  // FIXME should probably use a object factory and interface vs static methods
-  static public void write(OutputStream out, Object toEncode) throws IOException {
-    write(JSON, out, toEncode);
-  }
-
-  static public void write(String mimeType, OutputStream out, Object toEncode) throws IOException {
-    if (JSON.equals(mimeType)) {
-      out.write(gson.toJson(toEncode).getBytes());
-      // out.flush();
-    } else {
-      log.error(String.format("write mimeType %s not supported", mimeType));
-    }
-  }
-
-  public static String getKeyToMimeType(String apiTypeKey) {
-    if (!initialized) {
-      init();
-    }
-
-    String ret = MIME_TYPE_JSON;
-    if (keyToMimeType.containsKey(apiTypeKey)) {
-      ret = keyToMimeType.get(apiTypeKey);
-    }
-
-    return ret;
-  }
-
-  // API KEY to MIME TYPES (request or response?)
-  private static synchronized void init() {
-    keyToMimeType.put("messages", MIME_TYPE_JSON);
-    keyToMimeType.put("services", MIME_TYPE_JSON);
-    initialized = true;
-  }
+  public static final String API_MESSAGES = "messages";
+  public static final String API_SERVICE = "service";
 
   public static String getSimpleName(String serviceType) {
     int pos = serviceType.lastIndexOf(".");
-    if (pos > -1){
+    if (pos > -1) {
       return serviceType.substring(pos + 1);
-    }    
+    }
     return serviceType;
   }
 
-  // === method signatures end ===
+  public static final String getSafeReferenceName(String name) {
+    return name.replaceAll("[@/ .-]", "_");
+  }
+
+  public static String toPrettyJson(Object ret) {
+    return prettyGson.toJson(ret);
+  }
+
+  static public Object[] decodeArray(Object data) throws Exception {
+    // ITS GOT TO BE STRING - it just has to be !!! :)
+    String instr = (String) data;
+    // array of Strings ? - don't want to double encode !
+    Object[] ret = null;
+    synchronized (data) {
+      ret = gson.fromJson(instr, Object[].class);
+    }
+    return ret;
+  }
+
+  static public Message cliToMsg(String from, String to, String data) {
+    return cliToMsg(null, from, to, data);
+  }
+
+  /**
+   * This is the Cli encoder - it takes a line of text and generates the
+   * appropriate msg from it to either invoke (locally) or sendBlockingRemote
+   * (remotely)
+   * 
+   * <pre>
+   * 
+   * The expectation of this encoding is:
+   *    if "/api/service/" is found - the end of that string is the starting point
+   *    if "/api/service/" is not found - then the starting point of the string should be the service
+   *      e.g "runtime/getUptime"
+   * 
+   * Important to remember getRequestURI is NOT decoded and getPathInfo is.
+   * 
+   * 
+            
+            Method              URL-Decoded Result           
+            ----------------------------------------------------
+            getContextPath()        no      /app
+            getLocalAddr()                  127.0.0.1
+            getLocalName()                  30thh.loc
+            getLocalPort()                  8480
+            getMethod()                     GET
+            getPathInfo()           yes     /a?+b
+            getProtocol()                   HTTP/1.1
+            getQueryString()        no      p+1=c+dp+2=e+f
+            getRequestedSessionId() no      S%3F+ID
+            getRequestURI()         no      /app/test%3F/a%3F+b;jsessionid=S+ID
+            getRequestURL()         no      http://30thh.loc:8480/app/test%3F/a%3F+b;jsessionid=S+ID
+            getScheme()                     http
+            getServerName()                 30thh.loc
+            getServerPort()                 8480
+            getServletPath()        yes     /test?
+            getParameterNames()     yes     [p 2, p 1]
+            getParameter("p 1")     yes     c d
+   * </pre>
+   * 
+   * @param contextPath
+   *          - prefix to be added if supplied
+   * 
+   * @param from
+   *          - sender
+   * @param to
+   *          - target service
+   * @param cmd
+   *          - cli encoded msg
+   * @return
+   */
+  static public Message cliToMsg(String contextPath, String from, String to, String cmd) {
+    Message msg = Message.createMessage(from, to, "ls", null);
+
+    // because we always want a "Blocking/Return" from the cmd line - without a
+    // subscription
+    msg.setBlocking();
+
+    /**
+     * <pre>
+     
+     The key to this interface is leading "/" ...
+     "/" is absolute path - dir or execute
+     without "/" means runtime method - spaces and quotes can be delimiters
+    
+    "/"  -  list services
+    "/{serviceName}" - list data of service
+    "/{serviceName}/" - list methods of service
+    "/{serviceName}/{method}" - invoke method
+    "/{serviceName}/{method}/" - list parameters of method
+    "/{serviceName}/{method}/p0/p1/p2" - invoke method with parameters
+    
+     or runtime
+     {method}
+     {method}/
+     {method}/p01
+     * 
+     * 
+     * </pre>
+     */
+
+    cmd = cmd.trim();
+
+    // remove uninteresting api prefix
+    if (cmd.startsWith("/api/service")) {
+      cmd = cmd.substring("/api/service".length());
+    }
+
+    if (contextPath != null) {
+      cmd = contextPath + cmd;
+    }
+
+    // assume runtime as 'default'
+    if (msg.name == null) {
+      msg.name = "runtime";
+    }
+
+    // two possibilities - either it begins with "/" or it does not
+    // if it does begin with "/" its an absolute path to a dir, ls, or invoke
+    // if not then its a runtime method
+
+    if (cmd.startsWith("/")) {
+      // ABSOLUTE PATH !!!
+      String[] parts = cmd.split("/");
+
+      if (parts.length < 3) {
+        msg.method = "ls";
+        msg.data = new Object[] { "\"" + cmd + "\"" };
+        return msg;
+      }
+
+      // fix me diff from 2 & 3 "/"
+      if (parts.length >= 3) {
+        msg.name = parts[1];
+        // prepare the method
+        msg.method = parts[2].trim();
+
+        // FIXME - to encode or not to encode that is the question ...
+        Object[] payload = new Object[parts.length - 3];
+        for (int i = 3; i < parts.length; ++i) {
+          payload[i - 3] = parts[i];
+        }
+        msg.data = payload;
+      }
+      return msg;
+    } else {
+      // NOT ABOSLUTE PATH - SIMILAR TO EXECUTING IN THE RUNTIME /usr/bin path
+      // (ie runtime methods!)
+      // spaces for parameter delimiters ?
+      String[] spaces = cmd.split(" ");
+      // FIXME - need to deal with double quotes e.g. func A "B and C" D - p0 =
+      // "A" p1 = "B and C" p3 = "D"
+      msg.method = spaces[0];
+      Object[] payload = new Object[spaces.length - 1];
+      for (int i = 1; i < spaces.length; ++i) {
+        // webgui will never use this section of code
+        // currently the codepath is only excercised by InProcessCli
+        // all of this methods will be "optimized" single commands to runtime (i think)
+        // so we are going to error on the side of String parameters - other data types will have problems
+        payload[i - 1] = "\"" + spaces[i] + "\"";
+      }
+      msg.data = payload;
+
+      return msg;
+    }
+  }
+  
+  static public List<ApiDescription> getApis() {
+    List<ApiDescription> ret = new ArrayList<>();
+    ret.add(new ApiDescription("message", "{scheme}://{host}:{port}/api/messages", "ws://localhost:8888/api/messages",
+        "An asynchronous api useful for bi-directional websocket communication, primary messages api for the webgui.  URI is /api/messages data contains a json encoded Message structure"));
+    ret.add(new ApiDescription("service", "{scheme}://{host}:{port}/api/service", "http://localhost:8888/api/service/runtime/getUptime",
+        "An synchronous api useful for simple REST responses"));
+    return ret;
+  }
+  
+  public static void main(String[] args) {
+    LoggingFactory.init(Level.INFO);
+
+    try {
+      String json = CodecUtils.fromJson("test", String.class);
+      log.info("json {}", json);
+      json = CodecUtils.fromJson("a test", String.class);
+      log.info("json {}", json);
+      json = CodecUtils.fromJson("\"a/test\"", String.class);
+      log.info("json {}", json);
+      CodecUtils.fromJson("a/test", String.class);
+      
+    } catch(Exception e) {
+      log.error("main threw", e);
+    }
+  }
+
 }

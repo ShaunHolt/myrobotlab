@@ -27,6 +27,9 @@
 <category><pattern>MY NAME IS *</pattern>
 <template>Nice to meet you <star/>. <think><set name="name"><star/></set></think></template>
 </category>
+<category><pattern>WHAT IS MY NAME</pattern>
+<template><get name="name"/></template>
+</category>
 <category><pattern>SAY MY NAME</pattern>
 <template><random>
         <li><get name="name"/></li>
@@ -143,5 +146,16 @@
 </category>
 <category><pattern>SHOW ME INMOOV</pattern>
 <template>Search of pannous returned this: <sraix default="PICFAILED" hint="pic" service="pannous">SHOW ME <star/></sraix></template>
+</category>
+<category><pattern>MRLSRAIX</pattern>
+<template><sraix>Why is the sky blue</sraix></template>
+</category>
+<category><pattern>OOBMRLSRAIX</pattern>
+<template>You are talking to <sraix><oob>
+      <mrl>
+        <service>lloyd</service>
+        <method>getCurrentBotName</method>
+      </mrl>
+    </oob></sraix></template>
 </category>
 </aiml>

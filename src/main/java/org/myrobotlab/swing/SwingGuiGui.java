@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -33,6 +33,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionListener;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -48,6 +49,7 @@ import javax.swing.SwingUtilities;
 
 import org.myrobotlab.framework.MRLListener;
 import org.myrobotlab.framework.interfaces.ServiceInterface;
+import org.myrobotlab.image.Util;
 import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.SwingGui;
 import org.myrobotlab.swing.widget.Style;
@@ -162,7 +164,7 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
   public void buildGraph() {
     log.debug("buildGraph");
 
-    if (myService.getGraphXML() == null || myService.getGraphXML().length() == 0) {
+    if (swingGui.getGraphXML() == null || swingGui.getGraphXML().length() == 0) {
       if (graph == null) {
         graph = getNewMXGraph();
       }
@@ -188,7 +190,7 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
       mxCodecRegistry.register(new mxCellCodec(Type.INPORT));
 
       // load
-      Document document = mxUtils.parseXml(myService.getGraphXML());
+      Document document = mxUtils.parseXml(swingGui.getGraphXML());
 
       mxCodec codec2 = new mxCodec(document);
       graph = getNewMXGraph();
@@ -227,9 +229,7 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
       graphComponent = new mxGraphComponent(graph);
       add(graphComponent);
       // graphComponent.addKeyListener(this);
-
       // graphComponent.getGraphControl().addMouseListener(this);
-
       graphComponent.getGraphControl().addMouseMotionListener(new MouseMotionListener() {
 
         @Override
@@ -244,25 +244,10 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
         @Override
         public void mouseMoved(MouseEvent e) {
           // TODO: this doesn't do anything.
-          // Object cell = graphComponent.getCellAt(e.getX(),
-          // e.getY());
-          // too chatty log.debug("dragged - mouseMoved - cell " +
-          // cell
-          // + " " + e.getX() + "," + e.getY());
         }
       });
 
       graphComponent.getGraphControl().addMouseListener(new MouseAdapter() {
-
-        /*
-         * protected void mouseLocationChanged(MouseEvent e) {
-         * log.debug(e.getX() + ", " + e.getY()); }
-         * 
-         * public void mouseDragged(MouseEvent e) { // http://forum.jgraph
-         * .com/questions/1343/mouse-coordinates-at-drop-event Object cell =
-         * graphComponent.getCellAt(e.getX(), e.getY()); log.debug(e.getX() +
-         * "," + e.getY()); }
-         */
 
         @Override
         public void mouseReleased(MouseEvent e) {
@@ -281,9 +266,9 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
               // to process - (String) type
               SwingGraphVertex v = (SwingGraphVertex) m.getValue();
               if (v.displayName.equals("out")) {
-                new SwingOutMethodDialog(myService, "out method", v);
+                new SwingOutMethodDialog(swingGui, "out method", v);
               } else if (v.displayName.equals("in")) {
-                new SwingInMethodDialog(myService, "in method", v);
+                new SwingInMethodDialog(swingGui, "in method", v);
               }
             } else if (m.isEdge()) {
               log.error("isEdge");
@@ -296,10 +281,6 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
       graphComponent.setToolTips(true);
 
     }
-
-    // -------------------------END PURE
-    // JGRAPH--------------------------------------
-
   }
 
   public void buildLocalServiceGraph() {
@@ -342,12 +323,8 @@ public class SwingGuiGui extends ServiceGui implements ActionListener {
       }
 
       mxCell v1 = (mxCell) graph.insertVertex(parent, null, new SwingGraphVertex(serviceName, canonicalName, displayName, toolTip, SwingGraphVertex.Type.SERVICE), x, y, 100, 50,
-          "shape=image;image=/resource/" + canonicalName + ".png");
-      // "ROUNDED;fillColor=" + blockColor);
-
-      // graphComponent.getGraphControl().scrollRectToVisible(new
-      // Rectangle(0, 0, 900, 800), true);
-
+          "shape=image;image=file:///" + Util.getResourceDir() + "/" + canonicalName + ".png");
+      
       serviceCells.put(serviceName, v1);
 
       v1.setConnectable(false);

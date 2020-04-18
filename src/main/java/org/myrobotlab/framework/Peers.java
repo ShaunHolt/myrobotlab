@@ -38,7 +38,7 @@ public class Peers {
   }
 
   public static void main(String[] args) {
-    LoggingFactory.getInstance().configure();
+    LoggingFactory.init();
 
     // Peers dna = Peers.getPeers("InMoov");
     // Peers dna = Peers.getPeers("Plantoid");
@@ -126,15 +126,18 @@ public class Peers {
   // won't override !!!
   /*
    * @param key
+   * 
    * @param actualName
+   * 
    * @param type
+   * 
    * @param comment
    */
   public boolean suggestAs(String key, String actualName, String type, String comment) {
 
     type = CodecUtils.getServiceType(type);
     String fullkey = getPeerKey(key);
-    log.info(String.format("suggesting %s now as %s", fullkey, actualName));
+    log.info("suggesting {} now as {}", fullkey, actualName);
     put(key, getPeerKey(actualName), type, comment);
 
     return true;
@@ -143,7 +146,7 @@ public class Peers {
   public boolean suggestRootAs(String key, String actualName, String type, String comment) {
     type = CodecUtils.getServiceType(type);
     String fullkey = getPeerKey(key);
-    log.info(String.format("suggesting %s now as root %s", fullkey, actualName));
+    log.info("suggesting {} now as root {}", fullkey, actualName);
     put(key, actualName, type, comment);
 
     return true;

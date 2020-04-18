@@ -8,11 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
@@ -46,7 +45,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
     @Override
     public void run() {
 
-      log.info(String.format("New publisher instance started at a sample frequency of %s Hz", sampleFreq));
+      log.info("New publisher instance started at a sample frequency of {} Hz", sampleFreq);
       long sleepTime = 1000 / (long) sampleFreq;
       isPublishing = true;
       try {
@@ -60,7 +59,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
           log.info("Shutting down Publisher");
         } else {
           isPublishing = false;
-          log.error(String.format("publisher threw %s",e));
+          log.error("publisher threw {}", e);
         }
       }
     }
@@ -72,8 +71,12 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
 
       for (int i = 0; i < pinArray.length; ++i) {
         PinData pinData = new PinData(i, read(i));
+        // cache last value
+        PinDefinition pinDef = getPin(i);
+        pinDef.setValue(pinData.value);
+        
         pinArray[i] = pinData;
-        int address = pinData.address;
+        int address = pinDef.getAddress();
 
         // handle individual pins
         if (pinListeners.containsKey(address)) {
@@ -268,7 +271,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   static final int SOFT_RESET = 0x63;
 
   int touchsensors = 12; // Number of pins used for touch sensing. The rest can
-                         // be used as GPIO pins
+  // be used as GPIO pins
   /**
    * pin named map of all the pins on the board
    */
@@ -292,11 +295,10 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   Map<String, Set<Integer>> pinSets = new HashMap<String, Set<Integer>>();
 
   double sampleFreq = 1; // Set
-                         // default // hZ.
+  // default // hZ.
 
   public static void main(String[] args) {
-    LoggingFactory.getInstance().configure();
-    LoggingFactory.getInstance().setLevel(Level.INFO);
+    LoggingFactory.init("info");
 
     try {
       Mpr121 mpr121 = (Mpr121) Runtime.start("mpr121", "Mpr121");
@@ -307,21 +309,21 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
       mpr121.attach("esp", "0", "0x5A");
 
       mpr121.begin();
-      log.info(String.format("Reading touch sensor, %d", mpr121.touched()));
+      log.info("Reading touch sensor, {}", mpr121.touched());
 
     } catch (Exception e) {
       Logging.logError(e);
     }
   }
 
-  public Mpr121(String n) {
-    super(n);
+  public Mpr121(String n, String id) {
+    super(n, id);
     createPinList();
     refreshControllers();
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
+    subscribeToRuntime("registered");
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
 
@@ -394,8 +396,9 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
       sleep(1);
       config = readRegister8(AFE_CONFIGURATION_2);
       log.info(String.format("AFE Configuraiton register 0x%02X", config));
-      retries ++;
-      if (retries > 10) break;
+      retries++;
+      if (retries > 10)
+        break;
     }
 
     if (config != 0x24) {
@@ -544,7 +547,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   }
 
   @Override
-  public int read(Integer address) {
+  public int read(int address) {
     return pinIndex.get(address).getValue();
   }
 
@@ -554,7 +557,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   }
 
   @Override
-  public void pinMode(Integer address, String mode) {
+  public void pinMode(int address, String mode) {
     if (mode != null && mode.equalsIgnoreCase("INPUT")) {
     } else {
       log.error("Ads1115 only supports INPUT mode");
@@ -563,15 +566,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   }
 
   @Override
-  public void write(Integer address, Integer value) {
-    log.error("Ads1115 only supports read, not write");
-
-  }
-
-  @Override
   public PinData publishPin(PinData pinData) {
-    // caching last value
-    pinIndex.get(pinData.address).setValue(pinData.value);
     return pinData;
   }
 
@@ -588,7 +583,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   }
 
   @Override
-  public void attach(PinListener listener, Integer pinAddress) {
+  public void attach(PinListener listener, int pinAddress) {
     String name = listener.getName();
 
     if (listener.isLocal()) {
@@ -619,26 +614,26 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   }
 
   @Override
-  public void enablePin(Integer address) {
+  public void enablePin(int address) {
     if (controller == null) {
       error("must be connected to enable pins");
       return;
     }
 
-    log.info(String.format("enablePin %s", address));
+    log.info("enablePin {}", address);
     PinDefinition pin = pinIndex.get(address);
     pin.setEnabled(true);
     invoke("publishPinDefinition", pin);
 
     if (!isPublishing) {
-      log.info(String.format("Starting a new publisher instance"));
+      log.info("Starting a new publisher instance");
       publisher = new Publisher(getName());
       publisher.start();
     }
   }
 
   @Override
-  public void disablePin(Integer address) {
+  public void disablePin(int address) {
     if (controller == null) {
       log.error("Must be connected to disable pins");
       return;
@@ -700,7 +695,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
    */
   public double setSampleRate(double rate) {
     if (rate < 0) {
-      log.error(String.format("setSampleRate. Rate must be > 0. Ignored %s, returning to %s", rate, this.sampleFreq));
+      log.error("setSampleRate. Rate must be > 0. Ignored {}, returning to {}", rate, this.sampleFreq);
       return this.sampleFreq;
     }
     this.sampleFreq = rate;
@@ -728,7 +723,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
 
     ServiceType meta = new ServiceType(Mpr121.class);
     meta.addDescription("MPR121 Touch sensor & LED Driver");
-    meta.addCategory("shield", "sensor", "i2c");
+    meta.addCategory("shield", "sensors", "i2c");
     meta.setSponsor("Mats");
     meta.setAvailable(false);
     return meta;
@@ -736,7 +731,7 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
 
   @Override
   // TODO Implement individula sample rates per pin
-  public void enablePin(Integer address, Integer rate) {
+  public void enablePin(int address, int rate) {
     setSampleRate(rate);
     enablePin(address);
   }
@@ -763,11 +758,11 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
   public void attach(I2CController controller, String deviceBus, String deviceAddress) {
 
     if (isAttached && this.controller != controller) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
     }
 
     controllerName = controller.getName();
-    log.info(String.format("%s attach %s", getName(), controllerName));
+    log.info("{} attach {}", getName(), controllerName);
 
     this.deviceBus = deviceBus;
     this.deviceAddress = deviceAddress;
@@ -783,14 +778,14 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
       return;
 
     if (this.controllerName != controller.getName()) {
-      log.error(String.format("Trying to attached to %s, but already attached to (%s)", controller.getName(), this.controllerName));
+      log.error("Trying to attached to {}, but already attached to ({})", controller.getName(), this.controllerName);
       return;
     }
 
     this.controller = controller;
     isAttached = true;
     controller.attachI2CControl(this);
-    log.info(String.format("Attached %s device on bus: %s address %s", controllerName, deviceBus, deviceAddress));
+    log.info("Attached {} device on bus: {} address {}", controllerName, deviceBus, deviceAddress);
     broadcastState();
   }
 
@@ -853,18 +848,59 @@ public class Mpr121 extends Service implements I2CControl, PinArrayControl {
     ;
     return false;
   }
-  
+
   public PinDefinition getPin(String pinName) {
-    if (pinMap.containsKey(pinName)){
+    if (pinMap.containsKey(pinName)) {
       return pinMap.get(pinName);
     }
     return null;
   }
-  
-  public PinDefinition getPin(Integer address) {
-    if (pinIndex.containsKey(address)){
+
+  public PinDefinition getPin(int address) {
+    if (pinIndex.containsKey(address)) {
       return pinIndex.get(address);
     }
+    return null;
+  }
+
+  @Override
+  public void attach(PinListener listener, String pin) {
+    attach(listener, getPin(pin).getAddress());
+  }
+
+  @Override
+  public void disablePin(String pin) {
+    disablePin(getPin(pin).getAddress());
+  }
+
+  @Override
+  public void enablePin(String pin) {
+    enablePin(getPin(pin).getAddress());
+  }
+
+  @Override
+  public void enablePin(String pin, int rate) {
+    enablePin(getPin(pin).getAddress(), rate);
+  }
+
+  @Override
+  public void pinMode(String pin, String mode) {
+    pinMode(getPin(pin).getAddress(), mode);
+  }
+
+  @Override
+  public void write(String pin, int value) {
+    write(getPin(pin).getAddress(), value);
+  }
+
+  @Override
+  public void write(int address, int value) {
+    log.error("Mpr121 does not support writing");
+  }
+
+  @Override
+  public Integer getAddress(String pin) {
+    // TODO Auto-generated method stub
     return null;
   }
 }

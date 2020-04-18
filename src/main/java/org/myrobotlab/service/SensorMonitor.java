@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -65,7 +65,7 @@ public class SensorMonitor extends Service {
 
     try {
 
-      SensorMonitor sm = new SensorMonitor("sensors");
+      SensorMonitor sm = (SensorMonitor)Runtime.start("sensors","SensorMonitor");
       sm.startService();
 
       Runtime.createAndStart("arduino", "Arduino");
@@ -93,8 +93,8 @@ public class SensorMonitor extends Service {
     return String.format("%s_%d", source, pin);
   }
 
-  public SensorMonitor(String n) {
-    super(n);
+  public SensorMonitor(String n, String id) {
+    super(n, id);
   }
 
   /*
@@ -217,7 +217,7 @@ public class SensorMonitor extends Service {
 
     ServiceType meta = new ServiceType(SensorMonitor.class.getCanonicalName());
     meta.addDescription("sensor monitor - capable of displaying sensor information in a crude oscilliscope fasion");
-    meta.addCategory("sensor", "display");
+    meta.addCategory("sensors", "display");
 
     return meta;
   }

@@ -27,18 +27,18 @@ public class LidarVlp16 extends Service {
   transient DatagramSocket dataSocket;
   transient DatagramSocket positionSocket;
 
-  public LidarVlp16(String n) {
-    super(n);
+  public LidarVlp16(String n, String id) {
+    super(n, id);
   }
 
   public void listen() throws SocketException, UnknownHostException {
     dataSocket = new DatagramSocket(dataPort, InetAddress.getByName("0.0.0.0"));
-    dataSocket.setBroadcast(true); 
+    dataSocket.setBroadcast(true);
     positionSocket = new DatagramSocket(positionPort, InetAddress.getByName("0.0.0.0"));
     positionSocket.setBroadcast(true);
   }
 
-  public void receiveData() throws IOException {    
+  public void receiveData() throws IOException {
     byte[] recvBuf = new byte[15000];
     DatagramPacket receivePacket = new DatagramPacket(recvBuf, recvBuf.length);
     dataSocket.receive(receivePacket);
@@ -66,7 +66,7 @@ public class LidarVlp16 extends Service {
     // add dependency if necessary
     // meta.addDependency("org.coolproject", "1.0.0");
     meta.setAvailable(false);
-    meta.addCategory("sensor", "lidar");
+    meta.addCategory("sensors", "lidar");
     return meta;
   }
 

@@ -1,10 +1,10 @@
 package org.myrobotlab.service.interfaces;
 
-import java.io.UnsupportedEncodingException;
 import java.util.List;
 
 import org.myrobotlab.framework.interfaces.NameProvider;
 import org.myrobotlab.logging.LoggerFactory;
+import org.myrobotlab.service.abstracts.AbstractSpeechSynthesis.Voice;
 import org.myrobotlab.service.data.AudioData;
 import org.slf4j.Logger;
 
@@ -13,22 +13,19 @@ import org.slf4j.Logger;
  * speech should implement.
  * 
  */
-public interface SpeechSynthesis extends NameProvider {
-  
+public interface SpeechSynthesis extends NameProvider, TextListener, LocaleProvider {
+
   public final static Logger log = LoggerFactory.getLogger(SpeechSynthesis.class);
 
-  public abstract List<String> getVoices();
-
-  public boolean setVoice(String voice);
-
-  public abstract void setLanguage(String l);
-
-  public abstract String getLanguage();
+  public String getlastUtterance();
 
   /**
-   * @return a list of current possible languages
+   * set the speaker voice
+   * 
+   * @param voice
+   * @return
    */
-  public abstract List<String> getLanguages();
+  public boolean setVoice(String voice);
 
   /**
    * Begin speaking something and return immediately
@@ -36,49 +33,112 @@ public interface SpeechSynthesis extends NameProvider {
    * @param toSpeak
    *          - the string of text to speak.
    * @return TODO
-   * @throws Exception e
+   * @throws Exception
+   *           e
    */
-  public abstract AudioData speak(String toSpeak) throws Exception;
-  
+  public List<AudioData> speak(String toSpeak) throws Exception;
+
   /**
    * Begin speaking and wait until all speech has been played back/
    * 
    * @param toSpeak
    *          - the string of text to speak.
-   * @throws Exception e
+   * @throws Exception
+   *           e
    * @return true/false
    */
-  public abstract boolean speakBlocking(String toSpeak) throws Exception;
-  
-  public abstract void setVolume(float volume);
-
-  public abstract float getVolume();
+  public List<AudioData> speakBlocking(String toSpeak) throws Exception;
 
   /**
-   * Interrupt the current speaking.
+   * Change audioData volume
+   * 
+   * @param volume
+   *          - double between 0 and 1.
    */
-  public abstract void interrupt();
+  public void setVolume(double volume);
 
-  public String getVoice();
+  /**
+   * Get audioData volume
+   * 
+   * @return double
+   */
+  public double getVolume();
+
+  /**
+   * Get current voice
+   * 
+   * @return Voice
+   */
+  public Voice getVoice();
+
+  /**
+   * get voice effects on a remote server
+   * 
+   * @return list
+   */
+  // public List<String> getVoiceEffectFiles();
 
   /**
    * start callback for speech synth. (Invoked when speaking starts)
-   * @param utterance text
+   * 
+   * @param utterance
+   *          text
    * @return the same text
    */
   public String publishStartSpeaking(String utterance);
 
   /**
    * stop callback for speech synth. (Invoked when speaking stops.)
-   * @param utterance text
+   * 
+   * @param utterance
+   *          text
    * @return text
    */
   public String publishEndSpeaking(String utterance);
 
-  public String getLocalFileName(SpeechSynthesis provider, String toSpeak, String audioFileType) throws UnsupportedEncodingException;
+  /**
+   * silence the service
+   */
+  @Deprecated /* use setMute */
+  public void mute();
 
+  /**
+   * un-silence the service
+   */
+  @Deprecated /* use setMute */
+  public void unmute();
+  
+  /**
+   * mute or unmute 
+   * @param mute
+   */
+  public void setMute(boolean mute);
+
+  // FIXME - not needed in interface
+  // public String getLocalFileName(SpeechSynthesis provider, String toSpeak)
+  // throws UnsupportedEncodingException;
+
+  // FIXME addSpeechRecognizer
   public void addEar(SpeechRecognizer ear);
 
+  // FIXME - is this in the wrong place ??? - this seems like bot logic ...
   public void onRequestConfirmation(String text);
+
+  public List<Voice> getVoices();
+  
+  /**
+   * puts all speaking into blocking mode - default is false
+   * @param b
+   * @return
+   */
+  public Boolean setBlocking(Boolean b);
+
+  /**
+   * This attach subscribes the the SpeechRecognizer to the SpeechSynthesizer so the bot won't incorrectly
+   * recognize itself when its speaking ... otherwise silly things can happen when talking to self...
+   * 
+   * @param ear
+   */
+  public void attachSpeechRecognizer(SpeechRecognizer ear);
 
 }

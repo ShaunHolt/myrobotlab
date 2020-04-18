@@ -38,10 +38,30 @@ public class WikiDataFetcher extends Service {
     LoggingFactory.init(Level.INFO);
 
     try {
-      WikiDataFetcher wiki = (WikiDataFetcher) Runtime.start("wikiDataFetcher", "WikiDataFetcher");
-      wiki.setWebSite("enwiki");
-      wiki.setLanguage("en");
+      WikiDataFetcher wdf = (WikiDataFetcher) Runtime.start("wikiDataFetcher", "WikiDataFetcher");
+      wdf.setWebSite("enwiki");
+      wdf.setLanguage("en");
+      
+      String start = wdf.grabStart("halloween").toLowerCase();
+      
+      String query = "halloween";
+      String desc = wdf.getDescription(query);
+      log.info(query + " is " + desc);
 
+      
+      query = "empire state building";
+      desc = wdf.getDescription(query);
+      log.info(query + " is " + desc);
+     
+      query = "the pyramids";
+      desc = wdf.getDescription(query);
+      log.info(query + " is " + desc);
+     
+      query = "dog";
+      desc = wdf.getDescription(query);
+      log.info(query + " is " + desc);
+     
+      
       EntityDocument doc = WikiDataFetcher.getWiki("Halloween");
 
       log.info(getData("united states", "P36"));
@@ -49,7 +69,7 @@ public class WikiDataFetcher extends Service {
       log.info(doc.toString());
 
       log.info(getData("eiffel tower", "P2048"));
-      
+
       log.info(getData("nothing to test", "P2048"));
 
     } catch (Exception e) {
@@ -57,8 +77,8 @@ public class WikiDataFetcher extends Service {
     }
   }
 
-  public WikiDataFetcher(String n) {
-    super(n);
+  public WikiDataFetcher(String n, String id) {
+    super(n, id);
   }
 
   public String[] getCategories() {
@@ -261,64 +281,64 @@ public class WikiDataFetcher extends Service {
     // remove the try for dubug :
     // https://github.com/MyRobotLab/myrobotlab/issues/94
     try {
-    ArrayList<Object> al = getSnak(query, ID);
-    // TODO manage all snaks and qualifiers
-    Value data = ((JacksonValueSnak) al.get(1)).getDatavalue();
-    String dataType = (String) al.get(0);
-    String answer = "";
-    System.out.print("Datatype : " + dataType);
-    // TODO put switch in a function out of getData()
-    switch (dataType) {
-      case "wikibase-item"://
-        String info = (String) data.toString();
-        int beginIndex = info.indexOf('Q');
-        int endIndex = info.indexOf("(");
-        info = info.substring(beginIndex, endIndex - 1);
-        answer = getLabelById(info);
-        break;
-      case "time"://
-        data = (TimeValue) data;
-        answer = String.valueOf(((TimeValue) data).getDay()) + "/" + String.valueOf(((TimeValue) data).getMonth()) + "/" + String.valueOf(((TimeValue) data).getYear());
-        break;
-      case "globe-coordinate":
-        answer = ((GlobeCoordinatesValue) data).toString();
-        break;
-      case "monolingualtext"://
-        data = (MonolingualTextValue) data;
-        answer = data.toString();
-        break;
-      case "quantity"://
-        data = (QuantityValue) data;
-        String quantity = String.valueOf(((QuantityValue) data).getNumericValue());
-        String unit = String.valueOf(((QuantityValue) data).getUnit());
-        // String unit = data.toString();
-        int beginIndex2 = unit.indexOf('Q');
-        if (beginIndex2 != -1) {
-          unit = unit.substring(beginIndex2);
-          if (Long.parseLong(quantity, 16) < 2) {
-            quantity += " " + getLabelById(unit);
-          } else {
-            quantity += " " + getLabelById(unit) + "s";
+      ArrayList<Object> al = getSnak(query, ID);
+      // TODO manage all snaks and qualifiers
+      Value data = ((JacksonValueSnak) al.get(1)).getDatavalue();
+      String dataType = (String) al.get(0);
+      String answer = "";
+      System.out.print("Datatype : " + dataType);
+      // TODO put switch in a function out of getData()
+      switch (dataType) {
+        case "wikibase-item"://
+          String info = (String) data.toString();
+          int beginIndex = info.indexOf('Q');
+          int endIndex = info.indexOf("(");
+          info = info.substring(beginIndex, endIndex - 1);
+          answer = getLabelById(info);
+          break;
+        case "time"://
+          data = (TimeValue) data;
+          answer = String.valueOf(((TimeValue) data).getDay()) + "/" + String.valueOf(((TimeValue) data).getMonth()) + "/" + String.valueOf(((TimeValue) data).getYear());
+          break;
+        case "globe-coordinate":
+          answer = ((GlobeCoordinatesValue) data).toString();
+          break;
+        case "monolingualtext"://
+          data = (MonolingualTextValue) data;
+          answer = data.toString();
+          break;
+        case "quantity"://
+          data = (QuantityValue) data;
+          String quantity = String.valueOf(((QuantityValue) data).getNumericValue());
+          String unit = String.valueOf(((QuantityValue) data).getUnit());
+          // String unit = data.toString();
+          int beginIndex2 = unit.indexOf('Q');
+          if (beginIndex2 != -1) {
+            unit = unit.substring(beginIndex2);
+            if (Long.parseLong(quantity, 16) < 2) {
+              quantity += " " + getLabelById(unit);
+            } else {
+              quantity += " " + getLabelById(unit) + "s";
+            }
           }
-        }
-        answer = quantity;
-        break;
-      case "propertyId":
-        answer = ((PropertyIdValue) data).toString();
-        break;
-      case "url"://
-        answer = data.toString();
-        break;
-      case "commonsMedia":
-        answer = data.toString();
-        break;
-      default:
-        answer = "Not Found !";
-        break;
-    }
-    return answer;
+          answer = quantity;
+          break;
+        case "propertyId":
+          answer = ((PropertyIdValue) data).toString();
+          break;
+        case "url"://
+          answer = data.toString();
+          break;
+        case "commonsMedia":
+          answer = data.toString();
+          break;
+        default:
+          answer = "Not Found !";
+          break;
+      }
+      return answer;
     } catch (Exception e) {
-    return "Not Found !";
+      return "Not Found !";
     }
   }
 
@@ -425,15 +445,29 @@ public class WikiDataFetcher extends Service {
 
     ServiceType meta = new ServiceType(WikiDataFetcher.class.getCanonicalName());
     meta.addDescription("This service grab data from wikidata website");
-    meta.addCategory("intelligence");
+    meta.addCategory("ai");
     meta.setSponsor("beetlejuice");
     meta.addDependency("org.wikidata.wdtk", "wdtk-client", "0.8.0");
+    meta.exclude("org.slf4j", "slf4j-log4j12");
+    // force using httpClient service httpcomponents version
+    meta.exclude("org.apache.httpcomponents", "httpcore");
+    meta.exclude("org.apache.httpcomponents", "httpclient");
+    meta.addPeer("httpClient", "HttpClient", "httpClient");
+    // force using same jackson version as polly
     /*
-    meta.addDependency("org.wikidata.wdtk", "0.8.0-SNAPSHOT");
-    meta.addDependency("org.apache.commons.httpclient", "4.5.2");
-    meta.addDependency("org.apache.commons.commons-lang3", "3.3.2");
-    meta.addDependency("com.fasterxml.jackson.core", "2.5.0");
+    meta.exclude("com.fasterxml.jackson.core", "jackson-core");
+    meta.exclude("com.fasterxml.jackson.core", "jackson-databind");
+    meta.exclude("com.fasterxml.jackson.core", "jackson-annotations");
     */
+    meta.addDependency("com.fasterxml.jackson.core", "jackson-core", "2.9.9");
+    meta.addDependency("com.fasterxml.jackson.core", "jackson-databind", "2.9.10.3");
+    meta.addDependency("com.fasterxml.jackson.core", "jackson-annotations", "2.9.9");
+    /*
+     * meta.addDependency("org.wikidata.wdtk", "0.8.0-SNAPSHOT");
+     * meta.addDependency("org.apache.commons.httpclient", "4.5.2");
+     * meta.addDependency("org.apache.commons.commons-lang3", "3.3.2");
+     * meta.addDependency("com.fasterxml.jackson.core", "2.5.0");
+     */
     meta.setCloudService(true);
     return meta;
   }

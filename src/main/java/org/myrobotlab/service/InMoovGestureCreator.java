@@ -19,6 +19,7 @@ import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
+import org.myrobotlab.service.interfaces.ServoControl;
 import org.slf4j.Logger;
 
 /**
@@ -100,8 +101,8 @@ public class InMoovGestureCreator extends Service {
 
   }
 
-  public InMoovGestureCreator(String n) {
-    super(n);
+  public InMoovGestureCreator(String n, String id) {
+    super(n, id);
     // intializing variables
     servoitemholder = new ServoItemHolder[6][];
     frameitemholder = new ArrayList<FrameItemHolder>();
@@ -700,9 +701,9 @@ public class InMoovGestureCreator extends Service {
 
   public void control_loadscri(JList control_list) {
     // Load the Python-Script (out Python-Service) (button bottom-left)
-   // Python python = (Python) Runtime.getService("python");
-   //  Script script = python.getScript();
-    pythonscript = "not supported";//script.getCode();
+    // Python python = (Python) Runtime.getService("python");
+    // Script script = python.getScript();
+    pythonscript = "not supported";// script.getCode();
 
     parsescript(control_list);
   }
@@ -774,10 +775,10 @@ public class InMoovGestureCreator extends Service {
             i01.moveArm("right", fih.rbicep, fih.rrotate, fih.rshoulder, fih.romoplate);
           }
           if (tabs_main_checkbox_states[3]) {
-            i01.moveHand("left", fih.lthumb, fih.lindex, fih.lmajeure, fih.lringfinger, fih.lpinky, (double) fih.lwrist);
+            i01.moveHand("left", (double)fih.lthumb, (double)fih.lindex, (double)fih.lmajeure, (double)fih.lringfinger, (double)fih.lpinky, (double)fih.lwrist);
           }
           if (tabs_main_checkbox_states[4]) {
-            i01.moveHand("right", fih.rthumb, fih.rindex, fih.rmajeure, fih.rringfinger, fih.rpinky, (double) fih.rwrist);
+            i01.moveHand("right", (double)fih.rthumb, (double)fih.rindex, (double)fih.rmajeure, (double)fih.rringfinger, (double)fih.rpinky, (double)fih.rwrist);
           }
           if (tabs_main_checkbox_states[5]) {
             i01.moveTorso(fih.topStom, fih.midStom, fih.lowStom);
@@ -1100,7 +1101,7 @@ public class InMoovGestureCreator extends Service {
             inmtorso = i01.torso;
           }
 
-          Servo servo = null;
+          ServoControl servo = null;
 
           if (i1 == 0 || i1 == 2) {
             if (i2 == 0) {
@@ -1287,10 +1288,10 @@ public class InMoovGestureCreator extends Service {
           i01.moveArm("right", fih.rbicep, fih.rrotate, fih.rshoulder, fih.romoplate);
         }
         if (tabs_main_checkbox_states[3]) {
-          i01.moveHand("left", fih.lthumb, fih.lindex, fih.lmajeure, fih.lringfinger, fih.lpinky, (double) fih.lwrist);
+          i01.moveHand("left", (double)fih.lthumb, (double)fih.lindex, (double)fih.lmajeure, (double)fih.lringfinger, (double)fih.lpinky, (double) fih.lwrist);
         }
         if (tabs_main_checkbox_states[4]) {
-          i01.moveHand("right", fih.rthumb, fih.rindex, fih.rmajeure, fih.rringfinger, fih.rpinky, (double) fih.rwrist);
+          i01.moveHand("right", (double)fih.rthumb, (double)fih.rindex, (double)fih.rmajeure, (double)fih.rringfinger, (double)fih.rpinky, (double) fih.rwrist);
         }
         if (tabs_main_checkbox_states[5]) {
           i01.moveTorso(fih.topStom, fih.midStom, fih.lowStom);
@@ -1702,10 +1703,10 @@ public class InMoovGestureCreator extends Service {
         i01.moveArm("right", fih.rbicep, fih.rrotate, fih.rshoulder, fih.romoplate);
       }
       if (tabs_main_checkbox_states[3]) {
-        i01.moveHand("left", fih.lthumb, fih.lindex, fih.lmajeure, fih.lringfinger, fih.lpinky, (double) fih.lwrist);
+        i01.moveHand("left", (double)fih.lthumb, (double)fih.lindex, (double)fih.lmajeure, (double)fih.lringfinger, (double)fih.lpinky, (double) fih.lwrist);
       }
       if (tabs_main_checkbox_states[4]) {
-        i01.moveHand("right", fih.rthumb, fih.rindex, fih.rmajeure, fih.rringfinger, fih.rpinky, (double) fih.rwrist);
+        i01.moveHand("right", (double)fih.rthumb, (double)fih.rindex, (double)fih.rmajeure, (double)fih.rringfinger, (double)fih.rpinky, (double) fih.rwrist);
       }
       if (tabs_main_checkbox_states[5]) {
         i01.moveTorso(fih.topStom, fih.midStom, fih.lowStom);

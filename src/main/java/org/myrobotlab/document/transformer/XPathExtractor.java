@@ -23,6 +23,8 @@ import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
 import org.myrobotlab.document.Document;
+import org.myrobotlab.logging.LoggerFactory;
+import org.slf4j.Logger;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
@@ -37,6 +39,7 @@ import org.xml.sax.SAXException;
  */
 public class XPathExtractor extends AbstractStage {
 
+  public final static Logger log = LoggerFactory.getLogger(XPathExtractor.class.getCanonicalName());
   protected String xmlField = "xml";
   protected String configFile = "config/xpaths.txt";
   // mapping of field name to the xpaths that evaluate for its extraction
@@ -64,8 +67,7 @@ public class XPathExtractor extends AbstractStage {
     try {
       builder = factory.newDocumentBuilder();
     } catch (ParserConfigurationException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      log.warn("Parser configuration error.", e);
     }
     xpathFactory = XPathFactory.newInstance();
     xpath = xpathFactory.newXPath();
@@ -74,7 +76,7 @@ public class XPathExtractor extends AbstractStage {
       xpaths = loadConfig(configFile);
     } catch (XPathExpressionException e) {
       // TODO Auto-generated catch block
-      e.printStackTrace();
+      log.warn("XPath Expression problem loading file {}", configFile, e);
     }
 
   }
@@ -82,6 +84,10 @@ public class XPathExtractor extends AbstractStage {
   @Override
   public List<Document> processDocument(Document doc) {
     // TODO Auto-generated method stub
+    if (!doc.hasField(xmlField)) {
+      log.info("No XML Field on doc {}", doc.getId());
+      return null;
+    }
 
     for (Object o : doc.getField(xmlField)) {
       // TODO: this is bad , lets cast
@@ -89,8 +95,7 @@ public class XPathExtractor extends AbstractStage {
       try {
         processXml(xml, doc);
       } catch (XPathExpressionException | SAXException | IOException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+        log.warn("Exception processing xml", e);
         continue;
       }
 
@@ -124,8 +129,7 @@ public class XPathExtractor extends AbstractStage {
     try {
       fstream = new FileInputStream(filename);
     } catch (FileNotFoundException e) {
-      System.out.println("XPATH Extractor config file not found: " + filename);
-      e.printStackTrace();
+      log.warn("XPATH Extractor config file not found: {}", filename, e);
       return null;
     }
     DataInputStream in = new DataInputStream(fstream);
@@ -152,7 +156,7 @@ public class XPathExtractor extends AbstractStage {
         XPathExpression xPath = xpath.compile(strXPath);
 
         if (debug) {
-          System.out.println("Adding XPATH " + strXPath + " Maps To : " + fieldName);
+          log.info("Adding XPATH {} Maps To : {}", strXPath, fieldName);
         }
 
         if (configMap.containsKey(xPath)) {
@@ -164,8 +168,7 @@ public class XPathExtractor extends AbstractStage {
         }
       }
     } catch (IOException e) {
-      System.out.println("IO Exception reading from file " + filename);
-      e.printStackTrace();
+      log.warn("IO Exception reading from file {}", filename, e);
       // return what we can...
       return configMap;
     }
@@ -173,8 +176,7 @@ public class XPathExtractor extends AbstractStage {
     try {
       br.close();
     } catch (IOException e) {
-      System.out.println("Exception occured when trying to close the config file..");
-      e.printStackTrace();
+      log.warn("Exception occured when trying to close the config file.", e);
     }
 
     return configMap;

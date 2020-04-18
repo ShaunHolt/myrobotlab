@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -134,7 +134,7 @@ public class Wii extends Service implements WiimoteListener, SerialPortEventList
       }
       System.out.println(loops + " reflective method calls with lookup:" + (System.currentTimeMillis() - start) + " milliseconds.");
 
-      Wii wii = new Wii("wii");
+      Wii wii = (Wii)Runtime.start("wii", "Wii");
 
       // add the port as a possible option for the Arduino
       /*
@@ -146,10 +146,10 @@ public class Wii extends Service implements WiimoteListener, SerialPortEventList
        * (NoSuchPortException e1) { // TODO Auto-generated catch block
        * e1.printStackTrace(); }
        */
-      Arduino arduino = new Arduino("arduino");
+      Arduino arduino = (Arduino)Runtime.start("arduino", "Arduino");
       arduino.startService();
 
-      Servo servo = new Servo("servo");
+      Servo servo = (Servo)Runtime.start("servo", "Servo");
       servo.startService();
 
       // SwingGui gui = new SwingGui("gui");
@@ -167,8 +167,8 @@ public class Wii extends Service implements WiimoteListener, SerialPortEventList
     }
   }
 
-  public Wii(String n) {
-    super(n);
+  public Wii(String n, String id) {
+    super(n, id);
   }
 
   public void activateIRTRacking() {
@@ -215,7 +215,7 @@ public class Wii extends Service implements WiimoteListener, SerialPortEventList
       try {
         Thread.sleep(500);
       } catch (InterruptedException e) {
-        
+
       } // must slow down to initialize
 
       // force to correct state strobe state
@@ -410,10 +410,10 @@ public class Wii extends Service implements WiimoteListener, SerialPortEventList
 
     ServiceType meta = new ServiceType(Wii.class.getCanonicalName());
     meta.addDescription("Wii mote control and sensor info");
-    meta.addCategory("control", "sensor");
-    
+    meta.addCategory("control", "sensors");
+
     meta.addDependency("wiiusej", "wiiusej", "wiiusej");
-    // 
+    //
     return meta;
   }
 

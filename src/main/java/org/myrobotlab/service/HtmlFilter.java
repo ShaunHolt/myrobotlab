@@ -1,5 +1,7 @@
 package org.myrobotlab.service;
 
+import org.apache.commons.lang3.StringUtils;
+import org.jsoup.Jsoup;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.logging.Logging;
@@ -37,8 +39,8 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
     }
   }
 
-  public HtmlFilter(String reservedKey) {
-    super(reservedKey);
+  public HtmlFilter(String n, String id) {
+    super(n, id);
   }
 
   // helper function to add html tags
@@ -47,7 +49,7 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
   }
 
   public void addTextListener(TextListener service) {
-    addListener("publishText", service.getName(), "onText");
+    attachTextListener(service);
   }
 
   public String getPostHtmlTag() {
@@ -82,7 +84,8 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
   /**
    * The string to be appended to the input text Defaults to &lt;/pre&gt;
    * 
-   * @param postHtmlTag - a string to append to the text
+   * @param postHtmlTag
+   *          - a string to append to the text
    */
   public void setPostHtmlTag(String postHtmlTag) {
     this.postHtmlTag = postHtmlTag;
@@ -91,7 +94,8 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
   /**
    * The string to be prepended to the input text Defaults to &lt;pre&gt;
    * 
-   * @param preHtmlTag - a string to prepend to the text.
+   * @param preHtmlTag
+   *          - a string to prepend to the text.
    */
   public void setPreHtmlTag(String preHtmlTag) {
     this.preHtmlTag = preHtmlTag;
@@ -101,17 +105,18 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
    * If this is true, the input text will be striped of html. If this is false,
    * the input text will get the pre and post html tags added to it.
    * 
-   * @param stripHtml - if true, all content between &lt;and &gt; will be removed.
+   * @param stripHtml
+   *          - if true, all content between &lt;and &gt; will be removed.
    */
   public void setStripHtml(boolean stripHtml) {
     this.stripHtml = stripHtml;
   }
 
   // helper function to strip html tags.
-  public String stripHtml(String text) {
-    // TODO: something fancier but this works for now.
-    String cleanText = text.replaceAll("\\<.*?\\>", " ");
-    cleanText = cleanText.replaceAll("  ", " ");
+  public static String stripHtml(String text) {
+    if (StringUtils.isEmpty(text))
+      return text;
+    String cleanText = Jsoup.parse(text).text().trim();
     return cleanText.trim();
   }
 
@@ -127,9 +132,28 @@ public class HtmlFilter extends Service implements TextListener, TextPublisher {
 
     ServiceType meta = new ServiceType(HtmlFilter.class.getCanonicalName());
     meta.addDescription("This service will strip html markup from the input text");
-    meta.addCategory("data", "filter");
-
+    meta.addCategory("filter");
+    meta.addDependency("org.jsoup", "jsoup", "1.8.3");
+    meta.addDependency("org.apache.commons", "commons-lang3", "3.3.2");
     return meta;
+  }
+
+  @Override
+  public void attachTextListener(TextListener service) {
+    if (service == null) {
+      log.warn("{}.attachTextListener(null)");
+      return;
+    }
+    addListener("publishText", service.getName());
+  }
+  
+  @Override
+  public void attachTextPublisher(TextPublisher service) {
+    if (service == null) {
+      log.warn("{}.attachTextPublisher(null)");
+      return;
+    }
+    subscribe(service.getName(), "publishText");
   }
 
 }

@@ -2,6 +2,7 @@ package org.myrobotlab.document;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -34,19 +35,36 @@ public class Document {
   }
 
   public void setField(String fieldName, ArrayList<Object> value) {
-    data.put(fieldName, value);
+    if (value == null) {
+      data.remove(fieldName);
+    } else {
+      data.put(fieldName, value);
+    }
   }
 
   public void setField(String fieldName, Object value) {
-    // TODO Auto-generated method stub
-    if (data.containsKey(fieldName)) {
-      data.get(fieldName).add(value);
+    // set field overwrites existing values in the field.
+    if (value == null) {
+      data.remove(fieldName);
     } else {
       ArrayList<Object> values = new ArrayList<Object>();
       values.add(value);
       data.put(fieldName, values);
     }
+  }
 
+  /**
+   * helper for expected single value fields
+   * 
+   * @param fieldName
+   * @return
+   */
+  public Object getValue(String fieldName) {
+    List<Object> ret = getField(fieldName);
+    if (ret != null && ret.size() > 0) {
+      return (Object) ret.get(0);
+    }
+    return null;
   }
 
   public void renameField(String oldField, String newField) {
@@ -55,7 +73,6 @@ public class Document {
       data.put(newField, data.get(oldField));
       data.remove(oldField);
     }
-
   }
 
   public void addToField(String fieldName, Object value) {

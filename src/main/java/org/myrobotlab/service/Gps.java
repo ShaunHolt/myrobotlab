@@ -169,10 +169,10 @@ public class Gps extends Service implements SerialDataListener {
 
     try {
 
-      Gps template = new Gps("gps1");
+      Gps template = (Gps) Runtime.start("gps1", "Gps");
       template.startService();
 
-      Python python = new Python("python");
+      Python python = (Python) Runtime.start("python", "Python"); // new Python("python");
       python.startService();
 
       Runtime.createAndStart("gui", "SwingGui");
@@ -185,8 +185,8 @@ public class Gps extends Service implements SerialDataListener {
     }
   }
 
-  public Gps(String n) {
-    super(n);
+  public Gps(String n, String id) {
+    super(n, id);
   }
 
   public void addGPSListener(Service service) {
@@ -354,12 +354,12 @@ public class Gps extends Service implements SerialDataListener {
   }
 
   public void connect(String port) throws IOException {
-	  serial.open(port, 38400, 8, 1, 0);
+    serial.open(port, 38400, 8, 1, 0);
     // serial.publishType(PUBLISH_STRING); // GPS units publish strings
   }
 
   public void connect(String port, int baud) throws IOException {
-	  serial.open(port, baud, 8, 1, 0);
+    serial.open(port, baud, 8, 1, 0);
   }
 
   /***********************************************************************************
@@ -370,7 +370,8 @@ public class Gps extends Service implements SerialDataListener {
   // be converted
   /**
    * 
-   * @param nmea huh?
+   * @param nmea
+   *          huh?
    * @return no idea
    */
   public double convertNMEAToDegrees(String nmea) {
@@ -414,8 +415,7 @@ public class Gps extends Service implements SerialDataListener {
   }
 
   public void onGPS(GpsData gps) {
-    log.info(String.format("lat: %f", gps.latitude));
-    log.info(String.format("long: %f", gps.longitude));
+    log.info("lat: {} long: {}", gps.latitude, gps.longitude);
   }
 
   /**
@@ -425,6 +425,7 @@ public class Gps extends Service implements SerialDataListener {
    * Minimum Specific GNSS Data VTG Course Over Ground and Ground Speed GSA GNSS
    * DOP and Active Satellites MSS MSK Receiver Signal kmc - so the data you
    * have doesn't have two (GLL and MSK)
+   * 
    * @return string array of data
    */
   public String[] publishGGAData() {
@@ -799,8 +800,10 @@ public class Gps extends Service implements SerialDataListener {
   // This is how you create a Point
   /**
    * 
-   * @param lat latitude
-   * @param lon longitude
+   * @param lat
+   *          latitude
+   * @param lon
+   *          longitude
    * @return the point
    */
   public Point setPoint(double lat, double lon) {
@@ -839,6 +842,7 @@ public class Gps extends Service implements SerialDataListener {
     super.startService();
     try {
       serial = (Serial) startPeer("serial", "Serial");
+      // serial.attach(getName());
       serial.addByteListener(this);
 
       if (model == null) {
@@ -884,7 +888,7 @@ public class Gps extends Service implements SerialDataListener {
 
     ServiceType meta = new ServiceType(Gps.class.getCanonicalName());
     meta.addDescription("parses NMEA sentences coming in over a Serial service");
-    meta.addCategory("location", "sensor");
+    meta.addCategory("location", "sensors");
     meta.addPeer("serial", "Serial", "serial port for GPS");
     meta.setLicenseApache();
 

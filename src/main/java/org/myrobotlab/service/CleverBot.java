@@ -12,6 +12,7 @@ import com.google.code.chatterbotapi.ChatterBotFactory;
 import com.google.code.chatterbotapi.ChatterBotSession;
 import com.google.code.chatterbotapi.ChatterBotType;
 
+// FIXME - make an interface for this - search ? chat ? other ?
 public class CleverBot extends Service {
 
   private static final long serialVersionUID = 1L;
@@ -25,26 +26,8 @@ public class CleverBot extends Service {
   boolean initialized = false;
   boolean continueToTalkToSelf = true;
 
-  public static void main(String[] args) {
-    LoggingFactory.init();
-    try {
-      CleverBot cleverbot = new CleverBot("cleverbot");
-      cleverbot.startService();
-      log.info(cleverbot.chat("Hi"));
-
-      log.info(cleverbot.chat("How are you?"));
-
-      log.info("here");
-      /*
-       * SwingGui gui = new SwingGui("gui"); gui.startService();
-       */
-    } catch (Exception e) {
-      Logging.logError(e);
-    }
-  }
-
-  public CleverBot(String n) {
-    super(n);
+  public CleverBot(String n, String id) {
+    super(n, id);
     init();
   }
 
@@ -53,7 +36,7 @@ public class CleverBot extends Service {
     try {
       return session.think(toSay);
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("session threw", e);
     }
 
     return null;
@@ -93,7 +76,7 @@ public class CleverBot extends Service {
         input = bot1session.think(input);
       }
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("talkToSelf threw", e);
     }
 
     return input;
@@ -111,9 +94,34 @@ public class CleverBot extends Service {
 
     ServiceType meta = new ServiceType(CleverBot.class);
     meta.addDescription("chatbot service");
-    meta.addCategory("intelligence");
+    meta.addCategory("ai");
     meta.addDependency("ca.pjer", "chatter-bot-api", "2.0.1");
+    meta.addDependency("com.squareup.okhttp3", "okhttp", "3.9.0");
+    meta.setCloudService(true);
     return meta;
   }
 
+  public static void main(String[] args) {
+    LoggingFactory.init();
+    try {
+      CleverBot cleverbot = (CleverBot) Runtime.start("cleverbot", "CleverBot");
+
+      log.info(cleverbot.chat("Hi"));
+
+      log.info(cleverbot.chat("How are you?"));
+      log.info(cleverbot.chat("what is your name?"));
+      log.info(cleverbot.chat("what is 1 + 1?"));
+      log.info(cleverbot.chat("why is the sky blue?"));
+      log.info(cleverbot.chat("how can i smell?"));
+      log.info(cleverbot.chat("who am i?"));
+      log.info(cleverbot.chat("tell me a joke"));
+
+      log.info("here");
+      /*
+       * SwingGui gui = new SwingGui("gui"); gui.startService();
+       */
+    } catch (Exception e) {
+      Logging.logError(e);
+    }
+  }
 }

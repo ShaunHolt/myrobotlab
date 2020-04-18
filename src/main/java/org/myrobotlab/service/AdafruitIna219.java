@@ -5,10 +5,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
@@ -73,7 +73,7 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
       byte msb = (byte) 0x83;
       byte lsb = (byte) 0x00;
       double test = (double) ((((int) msb) << 8 | (int) lsb & 0xff)) * .01;
-      log.info(String.format("msb = %s, lsb = %s, test = %s", msb, lsb, test));
+      log.info("msb = {}, lsb = {}, test = {}", msb, lsb, test);
       // (((int)(readbuffer[0] & 0xff) << 5)) | ((int)(readbuffer[1] >>
       // 3));
     } catch (Exception e) {
@@ -81,13 +81,13 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
     }
   }
 
-  public AdafruitIna219(String n) {
-    super(n);
+  public AdafruitIna219(String n, String id) {
+    super(n, id);
     refreshControllers();
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
+    subscribeToRuntime("registered");
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
 
@@ -104,7 +104,7 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
   @Override
   public void setDeviceBus(String deviceBus) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceBus = deviceBus;
@@ -114,7 +114,7 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
   @Override
   public void setDeviceAddress(String deviceAddress) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceAddress = deviceAddress;
@@ -190,7 +190,7 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
     // And bytes are signed in Java so first a mask of 0xff needs to be
     // applied to the MSB to remove the sign
     int rawBusVoltage = (((int) readbuffer[0] & 0xff) << 8 | (int) readbuffer[1] & 0xff) >> 3;
-    log.debug(String.format("Busvoltage high byte = %s, low byte = %s, rawBusVoltagee = %s", readbuffer[0], readbuffer[1], rawBusVoltage));
+    log.debug("Busvoltage high byte = {}, low byte = {}, rawBusVoltagee = {}", readbuffer[0], readbuffer[1], rawBusVoltage);
     // LSB = 4mV, so multiply wit 4 to get the volatage in mV
     busVoltage = rawBusVoltage * 4;
     return busVoltage;
@@ -209,7 +209,7 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
     ServiceType meta = new ServiceType(AdafruitIna219.class.getCanonicalName());
     meta.addDescription("measures voltage and current of a circuit");
     meta.setLicenseApache();
-    meta.addCategory("shield", "sensor", "i2c");
+    meta.addCategory("shield", "sensors", "i2c");
     meta.setSponsor("Mats");
     return meta;
   }
@@ -236,11 +236,11 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
   public void attach(I2CController controller, String deviceBus, String deviceAddress) {
 
     if (isAttached && this.controller != controller) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName, controller.getName()));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName, controller.getName());
     }
 
     controllerName = controller.getName();
-    log.info(String.format("%s attach %s", getName(), controllerName));
+    log.info("{} attach {}", getName(), controllerName);
 
     this.deviceBus = deviceBus;
     this.deviceAddress = deviceAddress;
@@ -256,14 +256,14 @@ public class AdafruitIna219 extends Service implements I2CControl, VoltageSensor
       return;
 
     if (this.controllerName != controller.getName()) {
-      log.error(String.format("Trying to attached to %s, but already attached to (%s)", controller.getName(), this.controllerName));
+      log.error("Trying to attached to {}, but already attached to ({})", controller.getName(), this.controllerName);
       return;
     }
 
     this.controller = controller;
     isAttached = true;
     controller.attachI2CControl(this);
-    log.info(String.format("Attached %s device on bus: %s address %s", controllerName, deviceBus, deviceAddress));
+    log.info("Attached {} device on bus: {} address {}", controllerName, deviceBus, deviceAddress);
     broadcastState();
   }
 

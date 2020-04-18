@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -26,23 +26,25 @@
 // http://stackoverflow.com/questions/11515072/how-to-identify-optimal-parameters-for-cvcanny-for-polygon-approximation
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.opencv_core.cvPoint;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCircle;
-import static org.bytedeco.javacpp.opencv_imgproc.cvInitFont;
-import static org.bytedeco.javacpp.opencv_imgproc.cvPutText;
+import static org.bytedeco.opencv.global.opencv_core.cvPoint;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCircle;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvInitFont;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvPutText;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 
-import org.bytedeco.javacpp.opencv_core.CvScalar;
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.bytedeco.javacpp.opencv_core.KeyPoint;
-import org.bytedeco.javacpp.opencv_core.KeyPointVector;
-import org.bytedeco.javacpp.opencv_core.Mat;
-import org.bytedeco.javacpp.opencv_features2d.SimpleBlobDetector;
-import org.bytedeco.javacpp.opencv_imgproc.CvFont;
+import org.bytedeco.opencv.opencv_core.CvScalar;
+import org.bytedeco.opencv.opencv_core.IplImage;
+import org.bytedeco.opencv.opencv_core.KeyPoint;
+import org.bytedeco.opencv.opencv_core.KeyPointVector;
+import org.bytedeco.opencv.opencv_core.Mat;
+import org.bytedeco.opencv.opencv_features2d.SimpleBlobDetector;
+import org.bytedeco.opencv.opencv_imgproc.CvFont;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.service.data.Point2Df;
+import org.myrobotlab.math.geometry.Point2df;
 import org.slf4j.Logger;
 
 public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
@@ -51,7 +53,7 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
 
   public final static Logger log = LoggerFactory.getLogger(OpenCVFilterSimpleBlobDetector.class.getCanonicalName());
 
-  public ArrayList<Point2Df> pointsToPublish = new ArrayList<Point2Df>();
+  public ArrayList<Point2df> pointsToPublish = new ArrayList<Point2df>();
   transient CvFont font = new CvFont();
 
   public OpenCVFilterSimpleBlobDetector() {
@@ -66,12 +68,7 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
-
-    if (image == null) {
-      log.error("image is null");
-    }
-
+  public IplImage process(IplImage image) {
     // TODO: track an array of blobs , not just one.
     SimpleBlobDetector o = new SimpleBlobDetector();
 
@@ -84,13 +81,8 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
 
     o.detect(new Mat(image), pv);
 
-    try {
-      // close this o/w you could leak something i guess?
-      o.close();
-    } catch (Exception e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
+    // close this o/w you could leak something i guess?
+    o.close();
 
     // System.out.println(point.toString());
     if (pv.size() == 0) {
@@ -113,7 +105,7 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
     double minDist = 20.0;
     // Is this a new blob? or an old blob?
     boolean dupPoint = false;
-    for (Point2Df p : pointsToPublish) {
+    for (Point2df p : pointsToPublish) {
       double dist = Math.sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y));
       if (dist < minDist) {
         // we already have this point ?
@@ -123,38 +115,14 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
     }
 
     if (!dupPoint) {
-      pointsToPublish.add(new Point2Df(x, y));
-      System.out.println("There are " + pointsToPublish.size() + " blobs.");
+      pointsToPublish.add(new Point2df(x, y));
+      log.info("There are " + pointsToPublish.size() + " blobs.");
     }
     return image;
   }
 
   @Override
-  public IplImage display(IplImage frame, OpenCVData data) {
-    float x, y;
-    int xPixel, yPixel;
-    for (int i = 0; i < pointsToPublish.size(); ++i) {
-      Point2Df point = pointsToPublish.get(i);
-      x = point.x;
-      y = point.y;
-      // graphics.setColor(Color.red);
-      // if (useFloatValues) {
-      // xPixel = (int) (x * width);
-      // yPixel = (int) (y * height);
-      // } else {
-      xPixel = (int) x;
-      yPixel = (int) y;
-      // }
-      cvCircle(frame, cvPoint(xPixel, yPixel), 5, CvScalar.GREEN, -1, 8, 0);
-    }
-    cvPutText(frame, String.format("Blobs Found: %d", pointsToPublish.size()), cvPoint(20, 40), font, CvScalar.GREEN);
-    return frame;
-  }
-
-  @Override
   public void imageChanged(IplImage image) {
-    // TODO Auto-generated method stub
-
   }
 
   public void clearPoints() {
@@ -165,4 +133,14 @@ public class OpenCVFilterSimpleBlobDetector extends OpenCVFilter {
     return pointsToPublish.size();
   }
 
+  @Override
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
+
+    for (int i = 0; i < pointsToPublish.size(); ++i) {
+      Point2df point = pointsToPublish.get(i);
+      graphics.drawOval((int) point.x, (int) point.y, 5, 5);
+    }
+    graphics.drawString(String.format("Blobs Found: %d", pointsToPublish.size()), 20, 40);
+    return image;
+  }
 }

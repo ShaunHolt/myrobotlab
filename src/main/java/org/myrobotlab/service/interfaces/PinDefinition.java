@@ -1,211 +1,203 @@
 package org.myrobotlab.service.interfaces;
 
 import java.io.Serializable;
+
 import com.pi4j.io.gpio.GpioPinDigitalMultipurpose;
 
 public class PinDefinition extends SensorDefinition implements Serializable {
+  
+  private static final long serialVersionUID = 1L;
+  
+  String pin;
+  
+  Integer address;
 
-	private static final long	serialVersionUID	= 1L;
-	String pinName;
-	Integer address;
+  /**
+   * means actively reading
+   */
+  boolean enabled = false;
 
-	/**
-	 * means actively reading
-	 */
-	boolean enabled = false;
-	
-	/**
-	 * pin mode INPUT or OUTPUT
-	 */
-	String mode; 
-	
-	/**
-	 * statistics
-	 */
-	int totalSamples;
-	int min;
-	int max;
-	int avg;
+  /**
+   * pin mode INPUT or OUTPUT, other...
+   */
+  String mode;
 
-	boolean isAnalog = false;
+  /**
+   * statistics
+   */
+  int totalSamples;
+  int min;
+  int max;
+  int avg;
 
-	boolean isPwm = false;
+  boolean isAnalog = false;
 
-	boolean isDigital = true;
-	
-	boolean isRx = false;
-	
-	boolean isTx = false;
-	
-	boolean canRead = true;
-	
-	boolean canWrite = true;
+  boolean isPwm = false;
 
-	Integer value;
-	
+  boolean isDigital = true;
+
+  boolean isRx = false;
+
+  boolean isTx = false;
+
+  boolean canRead = true;
+
+  boolean canWrite = true;
+
+  Double value;
+
   GpioPinDigitalMultipurpose gpioPin;
-	
-	public PinDefinition(String serviceName, int address, String pinName){
-	  super(serviceName);    
+
+  public PinDefinition(String serviceName, int address, String pin) {
+    super(serviceName);
     this.address = address;
-    this.pinName = pinName;
-	}
-	
-	public PinDefinition(String serviceName, int address){
-	  this(serviceName, address, String.format("%d", address));
-	}
+    this.pin = pin;
+  }
 
-	public Integer getValue() {
-		return value;
-	}
+  public PinDefinition(String serviceName, int address) {
+    this(serviceName, address, String.format("%d", address));
+  }
 
-	public void setValue(Integer value) {
-		this.value = value;
-	}
+  public Integer getValue() {
+    return value.intValue();
+  }
+  
+  public void setValue(Double value) {
+    this.value = value;
+  }
 
-	public String getPinName() {
-		return pinName;
-	}
+  public void setValue(int value) {
+    this.value = new Double(value);
+  }
 
-	public Integer getAddress() {
-		return address;
-	}
+  public String getPinName() {
+    return pin;
+  }
 
-	public boolean isAnalog() {
-		return isAnalog;
-	}
+  public Integer getAddress() {
+    return address;
+  }
 
-	public boolean isDigital() {
-		return isDigital;
-	}
+  public boolean isAnalog() {
+    return isAnalog;
+  }
 
-	public boolean isPwm() {
-		return isPwm;
-	}
+  public boolean isDigital() {
+    return isDigital;
+  }
 
-	public void setName(int i) {
-		pinName = String.format("%d", i);
-	}
+  public boolean isPwm() {
+    return isPwm;
+  }
 
-	public void setPinName(String pinName) {
-		this.pinName = pinName;
-	}
+  public void setName(int i) {
+    pin = String.format("%d", i);
+  }
 
-	public void setAnalog(boolean b) {
-		isAnalog = b;
-	}
+  public void setPinName(String pin) {
+    this.pin = pin;
+  }
 
-	public void setDigital(boolean b) {
-		isDigital = b;
-	}
+  public void setAnalog(boolean b) {
+    isAnalog = b;
+  }
 
-	public void setAddress(int index) {
-		this.address = index;
-	}
+  public void setDigital(boolean b) {
+    isDigital = b;
+  }
 
+  public void setAddress(int index) {
+    this.address = index;
+  }
 
-	public void setPwm(boolean b) {
-		isPwm = b;
-	}
+  public void setPwm(boolean b) {
+    isPwm = b;
+  }
 
+  public void setGpioPin(GpioPinDigitalMultipurpose b) {
+    gpioPin = b;
+  }
 
-public void setGpioPin(GpioPinDigitalMultipurpose b) {
-      gpioPin = b;
-    }
-   
   public GpioPinDigitalMultipurpose getGpioPin() {
     return gpioPin;
   }
-  
-	public String toString(){
-		StringBuffer sb = new StringBuffer();
-		sb.append("pin def ");
-		sb.append(pinName);
-		sb.append(" ");
-		sb.append(address);
-		sb.append(" ");
-		if (isPwm)
-			{ sb.append("isPwm ");}
-		if(isAnalog){
-			sb.append("isAnalog ");
-		}
-		if(isDigital){
-			sb.append("isDigital ");
-		}
-		if(isTx){
-			sb.append("isTx ");
-		}
-		if(isRx){
-			sb.append("isRx ");
-		}
 
-		if (value != null){
-			sb.append("value ");
-			sb.append(value);
-		}
-		return sb.toString();
-	}
+  public String toString() {
+    StringBuffer sb = new StringBuffer();
+    sb.append("pin def ");
+    sb.append(pin);
+    sb.append(" ");
+    sb.append(address);
+    sb.append(" ");
+    if (isPwm) {
+      sb.append("isPwm ");
+    }
+    if (isAnalog) {
+      sb.append("isAnalog ");
+    }
+    if (isDigital) {
+      sb.append("isDigital ");
+    }
+    if (isTx) {
+      sb.append("isTx ");
+    }
+    if (isRx) {
+      sb.append("isRx ");
+    }
 
-	public void setRx(boolean b) {
-		isRx = true;
-	}
-	
-	public boolean isRx(){
-		return isRx;
-	}
-	
-	public void setTx(boolean b) {
-		isTx = true;
-	}
-	
-	public boolean isTx(){
-		return isTx;
-	}
-	
+    if (value != null) {
+      sb.append("value ");
+      sb.append(value);
+    }
+    return sb.toString();
+  }
 
-	public boolean isEnabled() {
-		return enabled;
-	}
+  public void setRx(boolean b) {
+    isRx = true;
+  }
 
-	public void setEnabled(boolean enabled) {
-		this.enabled = enabled;
-	}
+  public boolean isRx() {
+    return isRx;
+  }
 
-	public String getMode() {
-		return mode;
-	}
+  public void setTx(boolean b) {
+    isTx = true;
+  }
 
-	public void setMode(String mode) {
-		this.mode = mode;
-	}
-	
-	public boolean canRead(){
-	  return canRead;
-	}
-	
-	public boolean canWrite(){
+  public boolean isTx() {
+    return isTx;
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
+
+  public String getMode() {
+    return mode;
+  }
+
+  public void setMode(String mode) {
+    this.mode = mode;
+  }
+
+  public boolean canRead() {
+    return canRead;
+  }
+
+  public boolean canWrite() {
     return canWrite;
   }
 
   public void canWrite(boolean canWrite) {
     this.canWrite = canWrite;
   }
-  
+
   public void canRead(boolean canRead) {
     this.canRead = canRead;
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

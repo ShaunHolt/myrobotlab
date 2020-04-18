@@ -30,8 +30,8 @@ public class TextTransform extends Service implements TextListener, TextPublishe
     }
   }
 
-  public TextTransform(String n) {
-    super(n);
+  public TextTransform(String n, String id) {
+    super(n, id);
   }
 
   @Override
@@ -49,6 +49,11 @@ public class TextTransform extends Service implements TextListener, TextPublishe
   public void addTextListener(TextListener service) {
     addListener("publishText", service.getName(), "onText");
   }
+  
+  @Override
+  public void attachTextListener(TextListener service) {
+    addListener("publishText", service.getName());
+  }
 
   /**
    * This static method returns all the details of the class without it having
@@ -62,11 +67,20 @@ public class TextTransform extends Service implements TextListener, TextPublishe
 
     ServiceType meta = new ServiceType(TextTransform.class.getCanonicalName());
     meta.addDescription("TextTransform");
-    meta.addCategory("data", "filter");
-   
+    meta.addCategory("filter");
+
     // FIXME - this thing is at least 3 years old .. and does nothing I think :P
     meta.setAvailable(false);
     return meta;
+  }
+
+  @Override
+  public void attachTextPublisher(TextPublisher service) {
+    if (service == null) {
+      log.warn("{}.attachTextPublisher(null)");
+      return;
+    }
+    subscribe(service.getName(), "publishText");
   }
 
 }

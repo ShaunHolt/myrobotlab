@@ -129,6 +129,12 @@ void MrlServo::startSweep(int minUs, int maxUs, int step) {
   isSweeping = true;
 }
 
+void MrlServo::stop() {
+  isMoving = false;
+  isSweeping = false;
+}
+
+
 void MrlServo::stopSweep() {
   isMoving = false;
   isSweeping = false;
@@ -146,4 +152,3 @@ void MrlServo::setAcceleration(int acceleration) {
 void MrlServo::publishServoEvent(int type) {
   msg->publishServoEvent(id, type, (int)currentPosUs, targetPosUs);
 }
-

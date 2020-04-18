@@ -1,5 +1,6 @@
 package org.myrobotlab.service;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,21 +36,21 @@ public class VirtualDevice extends Service implements SerialDataListener {
   public final static Logger log = LoggerFactory.getLogger(VirtualDevice.class);
 
   /**
-   * uarts - the serial endpoints for thing which need testing over
-   * serial connections
+   * uarts - the serial endpoints for thing which need testing over serial
+   * connections
    */
   transient HashMap<String, Serial> uarts = new HashMap<String, Serial>();
-  
+
   /**
    * the logic to control all virtual devices
    */
   transient Python logic;
-  
+
   transient BlockingQueue<Message> msgs = new LinkedBlockingQueue<Message>();
 
-  public VirtualDevice(String n) {
-    super(n);
-    logic = (Python) createPeer("logic");
+  public VirtualDevice(String n, String id) {
+    super(n, id);
+    // logic = (Python) createPeer("logic");
   }
 
   public void startService() {
@@ -78,7 +79,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
 
   public void createVirtualArduino(String portName) throws IOException {
     createVirtualSerial(portName);
-    String newCode = FileIO.resourceToString("VirtualDevice/Arduino.py");
+    String newCode = FileIO.resourceToString("VirtualDevice"+File.separator+"Arduino.py");
     log.info(newCode);
     logic.openScript("Arduino.py", newCode);
     logic.exec(newCode);
@@ -121,7 +122,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
     // add the uart connected to my port
     uarts.put(myPort, uart);
 
-    log.info(String.format("connectToVirtualUart - creating uart %s <--> %s", myPort, uartPort));
+    log.info("connectToVirtualUart - creating uart {} <--> {}", myPort, uartPort);
     return uart;
   }
 
@@ -150,9 +151,8 @@ public class VirtualDevice extends Service implements SerialDataListener {
    * before being processed/invoked in the Service.
    * 
    * 
-   *           @see
-   *           org.myrobotlab.framework.Service#preProcessHook(org.myrobotlab.
-   *           framework.Message)
+   * @see org.myrobotlab.framework.Service#preProcessHook(org.myrobotlab.
+   * framework.Message)
    */
   @Override
   public boolean preProcessHook(Message msg) {
@@ -205,7 +205,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
       }
     }
 
-    log.info(String.format("returned %d msgs in %s ms", ret.size(), now - start));
+    log.info("returned {} msgs in {} ms", ret.size(), now - start);
     return ret;
   }
 
@@ -225,7 +225,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
     // put peer definitions in
     meta.addPeer("uart", "Serial", "uart");
     meta.addPeer("logic", "Python", "logic to implement");
-    
+
     // this is used for testing, and does not need to be tested
     meta.setAvailable(false);
 
@@ -237,6 +237,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
 
     try {
 
+      Runtime.main(new String[] { "--interactive" });
       String portName = "vport";
       Arduino arduino = (Arduino) Runtime.start("arduino", "Arduino");
       // Serial serial = arduino.getSerial();
@@ -248,7 +249,7 @@ public class VirtualDevice extends Service implements SerialDataListener {
       arduino.connect(portName);
 
       // Runtime.start("gui", "SwingGui");
-      Runtime.start("webgui", "WebGui");
+      // Runtime.start("webgui", "WebGui");
 
     } catch (Exception e) {
       Logging.logError(e);

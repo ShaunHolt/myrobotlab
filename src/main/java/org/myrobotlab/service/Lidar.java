@@ -48,7 +48,7 @@ public class Lidar extends Service implements SerialDataListener {
 
     try {
 
-      Lidar template = new Lidar("Lidar");
+      Lidar template =  (Lidar)Runtime.start("Lidar", "Lidar");
       template.startService();
 
       // Lidar lidar01 = (Lidar) Runtime.createAndStart("lidar01",
@@ -71,7 +71,7 @@ public class Lidar extends Service implements SerialDataListener {
       // parses the data.
       // lidar01.singleScan();
 
-      Python python = new Python("python");
+      Python python = (Python) Runtime.start("python", "Python");
       python.startService();
 
       Runtime.createAndStart("gui", "SwingGui");
@@ -84,8 +84,8 @@ public class Lidar extends Service implements SerialDataListener {
     }
   }
 
-  public Lidar(String n) {
-    super(n);
+  public Lidar(String n, String id) {
+    super(n, id);
     reserve(String.format("%s_serial", n), "Serial", "serial port for Lidar");
   }
 
@@ -116,7 +116,7 @@ public class Lidar extends Service implements SerialDataListener {
     }
     if (MODEL_SICK_LMS200.equals(model) && STATE_SINGLE_SCAN.equals(state) && index == dataMessageSize) {
       if (log.isDebugEnabled()) {
-        log.debug(String.format("Buffer size =  %s  Buffer =  %s", +buffer.size(), buffer.toString()));
+        log.debug("Buffer size =  {}  Buffer =  {}", buffer.size(), buffer);
       }
       // WTF do I do with this data now?
       buffer.flush(); // flush entire buffer so I can convert it to a byte
@@ -360,7 +360,7 @@ public class Lidar extends Service implements SerialDataListener {
 
     ServiceType meta = new ServiceType(Lidar.class.getCanonicalName());
     meta.addDescription("The Lidar Service - Light Detection And Ranging");
-    meta.addCategory("sensor");
+    meta.addCategory("sensors");
 
     return meta;
   }

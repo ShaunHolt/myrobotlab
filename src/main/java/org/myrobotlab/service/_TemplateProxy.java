@@ -1,27 +1,23 @@
 package org.myrobotlab.service;
 
-import org.myrobotlab.service.PythonProxy;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.logging.Level;
-import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.slf4j.Logger;
-import org.myrobotlab.service.Runtime;
-import org.myrobotlab.framework.Message;
-import java.io.File;
+
 /**
-*This class exists as a proxy to control native MRL services connected through the web API. 
-*Methods of that native service are called through this class's {@link #exec(String, Object[])} method.
-**/
+ * This class exists as a proxy to control native MRL services connected through
+ * the web API. Methods of that native service are called through this class's
+ * {@link #exec(String, Object[])} method.
+ **/
 public class _TemplateProxy extends PythonProxy {
 
-  public _TemplateProxy(String n) {
-    super(n);
+  public _TemplateProxy(String n, String id) {
+    super(n, id);
   }
 
   public Object test(String testString) {
-	return exec("test", new Object[] {(Object) testString});
+    return exec("test", new Object[] { (Object) testString });
   }
 
   /**
@@ -37,13 +33,14 @@ public class _TemplateProxy extends PythonProxy {
     ServiceType meta = new ServiceType(_TemplateProxy.class.getCanonicalName());
     meta.addDescription("Template proxy service");
     meta.setAvailable(false);
-    return PythonProxy.addMetaData(meta); //This is used so that the dependencies and peers are automatically added
+    return PythonProxy.addMetaData(meta); // This is used so that the
+    // dependencies and peers are
+    // automatically added
   }
 
-
-  //Required because of Java reflection weirdness
+  // Required because of Java reflection weirdness
   public void handshake() {
-	super.handshake();
+    super.handshake();
   }
 
   public static void main(String[] args) {

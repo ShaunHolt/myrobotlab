@@ -13,11 +13,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.myrobotlab.framework.Registration;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.ServiceInterface;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
@@ -65,7 +64,7 @@ public class OledSsd1306 extends Service implements I2CControl {
   public List<String> controllers = new ArrayList<String>();
   public String controllerName;
   transient public I2CController controller; // Remove // has
-                                             // been
+  // been
   public List<String> deviceAddressList = Arrays.asList("0x3C", "0x3D");
 
   public String deviceAddress = "0x3C";
@@ -116,10 +115,10 @@ public class OledSsd1306 extends Service implements I2CControl {
   public static int SSD1306_128_32 = 1;
   public static int SSD1306_96_16 = 2;
   public int oledType = SSD1306_128_64; // Set
-                                        // default
-                                        // oledType
-                                        // to
-                                        // 128*64
+  // default
+  // oledType
+  // to
+  // 128*64
 
   public static final int BLACK = 0;
   public static final int WHITE = 1;
@@ -140,8 +139,8 @@ public class OledSsd1306 extends Service implements I2CControl {
   public int[] buffer;
   // pin
   private int vccstate; // vccstate
-                        // //
-                        // vccstate
+  // //
+  // vccstate
   private int rotation;
 
   static int premask[] = { 0x00, 0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE };
@@ -150,8 +149,8 @@ public class OledSsd1306 extends Service implements I2CControl {
   public boolean isAttached = false;
 
   public static void main(String[] args) {
-    LoggingFactory.getInstance().configure();
-    LoggingFactory.getInstance().setLevel(Level.DEBUG);
+    LoggingFactory.init("info");
+
     try {
       OledSsd1306 oledSsd1306 = (OledSsd1306) Runtime.start("OledSsd1306", "OledSsd1306");
       Runtime.start("gui", "SwingGui");
@@ -161,15 +160,15 @@ public class OledSsd1306 extends Service implements I2CControl {
     }
   }
 
-  public OledSsd1306(String n) {
-    super(n);
+  public OledSsd1306(String n, String id) {
+    super(n, id);
     refreshControllers();
-    subscribe(Runtime.getInstance().getName(), "registered", this.getName(), "onRegistered");
+    subscribeToRuntime("registered");
 
     setDisplayType(SSD1306_128_64);
   }
 
-  public void onRegistered(ServiceInterface s) {
+  public void onRegistered(Registration s) {
     refreshControllers();
     broadcastState();
   }
@@ -185,7 +184,7 @@ public class OledSsd1306 extends Service implements I2CControl {
   @Override
   public void setDeviceBus(String deviceBus) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceBus = deviceBus;
@@ -195,7 +194,7 @@ public class OledSsd1306 extends Service implements I2CControl {
   @Override
   public void setDeviceAddress(String deviceAddress) {
     if (isAttached) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
       return;
     }
     this.deviceAddress = deviceAddress;
@@ -223,7 +222,7 @@ public class OledSsd1306 extends Service implements I2CControl {
       buffer = new int[SSD1306_LCDHEIGHT * SSD1306_LCDWIDTH / 8];
       buffer = SSD1306_96_16Data.clone();
     } else {
-      log.error(String.format("DisplayType %s not implemented.", displayType));
+      log.error("DisplayType {} not implemented.", displayType);
     }
   }
 
@@ -789,8 +788,8 @@ public class OledSsd1306 extends Service implements I2CControl {
     // write solid bytes while we can - effectively doing 8 rows at a time
     if (h >= 8) {
       if (color == INVERSE) { // separate copy of the code so we don't impact
-                              // performance of the black/white write version
-                              // with an extra comparison per loop
+        // performance of the black/white write version
+        // with an extra comparison per loop
         do {
           buffer[pBuf] = ~(buffer[pBuf]);
 
@@ -887,11 +886,11 @@ public class OledSsd1306 extends Service implements I2CControl {
   public void attach(I2CController controller, String deviceBus, String deviceAddress) {
 
     if (isAttached && this.controller != controller) {
-      log.error(String.format("Already attached to %s, use detach(%s) first", this.controllerName));
+      log.error("Already attached to {}, use detach({}) first", this.controllerName);
     }
 
     controllerName = controller.getName();
-    log.info(String.format("%s attach %s", getName(), controllerName));
+    log.info("{} attach {}", getName(), controllerName);
 
     this.deviceBus = deviceBus;
     this.deviceAddress = deviceAddress;
@@ -907,14 +906,14 @@ public class OledSsd1306 extends Service implements I2CControl {
       return;
 
     if (this.controllerName != controller.getName()) {
-      log.error(String.format("Trying to attached to %s, but already attached to (%s)", controller.getName(), this.controllerName));
+      log.error("Trying to attached to {}, but already attached to ({})", controller.getName(), this.controllerName);
       return;
     }
 
     this.controller = controller;
     isAttached = true;
     controller.attachI2CControl(this);
-    log.info(String.format("Attached %s device on bus: %s address %s", controllerName, deviceBus, deviceAddress));
+    log.info("Attached {} device on bus: {} address {}", controllerName, deviceBus, deviceAddress);
     broadcastState();
   }
 
@@ -927,12 +926,12 @@ public class OledSsd1306 extends Service implements I2CControl {
 
   @Override
   public void detach(Attachable service) {
-    
-    if (service!=null)
-    if (I2CController.class.isAssignableFrom(service.getClass())) {
-      detachI2CController((I2CController) service);
-      return;
-    }
+
+    if (service != null)
+      if (I2CController.class.isAssignableFrom(service.getClass())) {
+        detachI2CController((I2CController) service);
+        return;
+      }
   }
 
   @Override
@@ -945,14 +944,12 @@ public class OledSsd1306 extends Service implements I2CControl {
     isAttached = false;
     broadcastState();
   }
-  
-  
+
   @Override
   public void stopService() {
-
-    if (isAttached(controller))
-    {
-    controller.detachI2CControl(this);
+    super.stopService();
+    if (isAttached(controller)) {
+      controller.detachI2CControl(this);
     }
   }
 

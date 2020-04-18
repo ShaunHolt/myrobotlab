@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -96,12 +96,12 @@ public class MotorDualPwmGui extends ServiceGui implements ActionListener, Chang
   String attach = "attach";
   String detach = "detach";
   JButton attachButton = new JButton(attach);
-  
+
   String setLeftPwmPin = "setLeftPwmPin";
   String setRightPwmPin = "setRightPwmPin";
 
-  JComboBox<String> leftPwmPinList = new JComboBox<String>();
-  JComboBox<String> rightPwmPinList = new JComboBox<String>();
+  JComboBox<String> leftPwmPinList = new JComboBox<>();
+  JComboBox<String> rightPwmPinList = new JComboBox<>();
 
   MotorDualPwm myMotor;
 
@@ -146,26 +146,24 @@ public class MotorDualPwmGui extends ServiceGui implements ActionListener, Chang
     } else if (source == stopButton) {
       power.setValue(0);
 
-    } else if (source == invert){
+    } else if (source == invert) {
       myMotor.setInverted(invert.isSelected());
-      
+
     } else if (source == attachButton) {
       if (attachButton.getText().equals(attach)) {
-        myService.sendBlocking(boundServiceName, setLeftPwmPin, Integer.decode(leftPwmPinList.getSelectedItem().toString()));
-        myService.sendBlocking(boundServiceName, setRightPwmPin, Integer.decode(rightPwmPinList.getSelectedItem().toString()));
-        myService.send(boundServiceName, attach, controllerList.getSelectedItem());
+        swingGui.sendBlocking(boundServiceName, setLeftPwmPin, Integer.decode(leftPwmPinList.getSelectedItem().toString()));
+        swingGui.sendBlocking(boundServiceName, setRightPwmPin, Integer.decode(rightPwmPinList.getSelectedItem().toString()));
+        swingGui.send(boundServiceName, attach, controllerList.getSelectedItem());
         /*
-        myMotor.setLeftPwmPin((int)Integer.decode(leftPwmPinList.getSelectedItem().toString()));
-        myMotor.setRightPwmPin((int)Integer.decode(rightPwmPinList.getSelectedItem().toString()));
-        try {
-          myMotor.attach((String) controllerList.getSelectedItem());
-        } catch (Exception e1) {
-          // TODO Auto-generated catch block
-          e1.printStackTrace();
-        }
-        */
+         * myMotor.setLeftPwmPin((int)Integer.decode(leftPwmPinList.
+         * getSelectedItem().toString()));
+         * myMotor.setRightPwmPin((int)Integer.decode(rightPwmPinList.
+         * getSelectedItem().toString())); try { myMotor.attach((String)
+         * controllerList.getSelectedItem()); } catch (Exception e1) { // TODO
+         * Auto-generated catch block e1.printStackTrace(); }
+         */
       } else {
-        myService.send(boundServiceName, detach, controllerList.getSelectedItem());
+        swingGui.send(boundServiceName, detach, controllerList.getSelectedItem());
       }
     }
 
@@ -188,7 +186,7 @@ public class MotorDualPwmGui extends ServiceGui implements ActionListener, Chang
   @Override
   public void subscribeGui() {
     subscribe("publishChangePos");
-    myService.send(boundServiceName, "publishState");
+    swingGui.send(boundServiceName, "publishState");
   }
 
   @Override
@@ -197,15 +195,15 @@ public class MotorDualPwmGui extends ServiceGui implements ActionListener, Chang
   }
 
   public void onState(MotorDualPwm motor) {
-    
+
     removeListeners();
     refreshControllers();
 
     setEnabled(motor.isAttached());
-    
-    leftPwmPinList.setSelectedIndex(motor.leftPwmPin);
-    rightPwmPinList.setSelectedIndex(motor.rightPwmPin);
-    
+
+    leftPwmPinList.setSelectedItem(motor.leftPwmPin);
+    rightPwmPinList.setSelectedItem(motor.rightPwmPin);
+
     if (motor.isAttached()) {
       MotorController mc = (MotorController) motor.getController();
       controllerList.setSelectedItem(mc.getName());
@@ -239,7 +237,7 @@ public class MotorDualPwmGui extends ServiceGui implements ActionListener, Chang
     Object source = ce.getSource();
     if (power == source) {
       powerValue.setText(String.format("in %3.2f out %3.0f", power.getScaledValue(), myMotor.getPowerLevel()));
-      myService.send(boundServiceName, "move", power.getScaledValue());
+      swingGui.send(boundServiceName, "move", power.getScaledValue());
     }
   }
 

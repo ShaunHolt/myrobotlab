@@ -32,6 +32,9 @@ import SimpleOpenNI.SimpleOpenNIConstants;
  * 
  *         Service to expose the capabilities of kinect like sensors through a
  *         modified SimpleOpenNI interface
+ *         
+ *         Dependencies 
+ *            on Linux : boost-devel
  * 
  *         References
  * 
@@ -43,6 +46,8 @@ import SimpleOpenNI.SimpleOpenNIConstants;
  *         https://www.youtube.com/watch?v=KKuiuctKGRQ Some snippets are taken
  *         from "Making Things See" a excellent book and I recommend buying it
  *         http://shop.oreilly.com/product/0636920020684.do
+ *         
+ *         
  * 
  */
 public class OpenNi extends Service // implements
@@ -50,8 +55,9 @@ public class OpenNi extends Service // implements
 // HandTracker.NewFrameListener
 {
 
-	public boolean capturing = false;
-	public class Worker extends Thread {
+  public boolean capturing = false;
+
+  public class Worker extends Thread {
     public boolean isRunning = false;
     public String type = null;
 
@@ -69,12 +75,10 @@ public class OpenNi extends Service // implements
             getData();
           } else if ("hands".equals(type)) {
             drawHand();
-            
-          } 
-          else if ("map3D".equals(type)) {
-          	get3DData();
-          }
-          else {
+
+          } else if ("map3D".equals(type)) {
+            get3DData();
+          } else {
             error("unknown worker %s", type);
             isRunning = false;
           }
@@ -134,7 +138,7 @@ public class OpenNi extends Service // implements
   private boolean initialized = false;
 
   transient Worker worker = null;
-  private boolean recordSingleFrame = false;
+  private boolean recordFrame = false;
 
   private boolean createHeader = true;
 
@@ -150,8 +154,8 @@ public class OpenNi extends Service // implements
     return radians * RAD_TO_DEG;
   }
 
-  public OpenNi(String n) {
-    super(n);
+  public OpenNi(String n, String id) {
+    super(n, id);
   }
 
   // USER BEGIN ---------------------------------------------
@@ -626,11 +630,11 @@ public class OpenNi extends Service // implements
 
     }
 
-    if (recordSingleFrame) {
-      addCSVDataFrame(skeleton, recordSingleFrame);
-      addRubySketchUpFrame(skeleton, recordSingleFrame);
+    if (recordFrame) {
+      addCSVDataFrame(skeleton, recordFrame);
+      addRubySketchUpFrame(skeleton, recordFrame);
       SerializableImage.writeToFile(frame, String.format("skeleton.%d.png", frameNumber));
-      recordSingleFrame = false;
+      recordFrame = false;
     }
 
   }
@@ -639,12 +643,12 @@ public class OpenNi extends Service // implements
   public String format(PVector v) {
     return String.format("%d %d %d", Math.round(v.x), Math.round(v.y), Math.round(v.z));
   }
-  
+
   public OpenNiData get3DData() {
-  	OpenNiData data = new OpenNiData();
-  	context.update();
-  	data.depthPImage = context.depthImage();
-  	data.depthMapRW = context.depthMapRealWorld();
+    OpenNiData data = new OpenNiData();
+    context.update();
+    data.depthPImage = context.depthImage();
+    data.depthMapRW = context.depthMapRealWorld();
     data.depth = data.depthPImage.getImage();
     frame = data.depth;
     ++frameNumber;
@@ -667,7 +671,7 @@ public class OpenNi extends Service // implements
     // we should be able to use this to compute the depth for each pixel in
     // the RGB image.
     data.depthMap = context.depthMap();
-    //data.depthMapRW = context.depthMapRealWorld();
+    // data.depthMapRW = context.depthMapRealWorld();
 
     if (enableRGB) {
       data.rbgPImage = context.rgbImage();
@@ -815,20 +819,17 @@ public class OpenNi extends Service // implements
 
   // publishing the big kahuna <output>
   public final OpenNiData publishOpenNIData(OpenNiData data) {
-	if (data!=null)
-		{
-		capturing = true;
-		}
-	else
-		{
-			capturing = false;	
-		}
+    if (data != null) {
+      capturing = true;
+    } else {
+      capturing = false;
+    }
     return data;
   }
 
   // FIXME - doesnt currently work
-  public void recordSingleFrame() {
-    recordSingleFrame = true;
+  public void recordFrame() {
+    recordFrame = true;
   }
 
   public void registerDispose(SimpleOpenNI simpleOpenNI) {
@@ -916,10 +917,9 @@ public class OpenNi extends Service // implements
     }
     worker = new Worker("map3D");
     worker.start();
-  	
+
   }
-  
-  
+
   // shutdown worker
   public void stopCapture() {
     if (worker != null) {
@@ -946,7 +946,7 @@ public class OpenNi extends Service // implements
 
     OpenNi openni = (OpenNi) Runtime.createAndStart("openni", "OpenNi");
     openni.startUserTracking();
-    // openni.recordSingleFrame();
+    // openni.recordFrame();
     // openni.startHandTracking();
   }
 
@@ -962,13 +962,18 @@ public class OpenNi extends Service // implements
 
     ServiceType meta = new ServiceType(OpenNi.class.getCanonicalName());
     meta.addDescription("OpenNI Service - 3D sensor");
-    meta.addCategory("video", "vision", "sensor", "telerobotics");
+    meta.addCategory("video", "vision", "sensors", "telerobotics");
     meta.sharePeer("streamer", "streamer", "VideoStreamer", "video streaming service for webgui.");
     // meta.addDependency("com.googlecode.simpleopenni", "1.96");
+
+    meta.addDependency("simpleopenni", "openni", "1.96");
+    meta.addDependency("org.myrobotlab.openni", "openni-deps", "0.1", "zip");
     
-    meta.addDependency("simpleopenni",  "openni", "1.96");
+    meta.addDependency("javax.vecmath", "vecmath", "1.5.2");
+    meta.addDependency("java3d", "j3d-core", "1.3.1");
+    meta.addDependency("java3d", "j3d-core-utils", "1.3.1");
+
     return meta;
   }
-
 
 }

@@ -1,16 +1,15 @@
 package org.myrobotlab.service;
 
 import org.myrobotlab.framework.ServiceType;
-import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
 import org.myrobotlab.service.abstracts.AbstractMotor;
 import org.myrobotlab.service.interfaces.MotorController;
 
 /**
- * A general motor implementation with a "simple H-bridge" where 
- * one control line is power with pwm and the
- * other control line is determines direction of spin.
+ * A general motor implementation with a "simple H-bridge" where one control
+ * line is power with pwm and the other control line is determines direction of
+ * spin.
  * 
  */
 
@@ -18,35 +17,40 @@ public class Motor extends AbstractMotor {
 
   private static final long serialVersionUID = 1L;
 
-  Integer pwrPin;
-  Integer dirPin;
+  String pwrPin;
+  String dirPin;
   Integer pwmFreq;
 
-  public Motor(String n) {
-    super(n);
+  public Motor(String n, String id) {
+    super(n, id);
   }
-
-  public void setPwrDirPins(int pwrPin, int dirPin) {
+  
+  public void setPwrDirPins(String pwrPin, String dirPin) {
     this.pwrPin = pwrPin;
     this.dirPin = dirPin;
     broadcastState();
   }
-  
 
-  public Integer getPwrPin() {
+  public void setPwrDirPins(int pwrPin, int dirPin) {
+    this.pwrPin = pwrPin +"";
+    this.dirPin = dirPin + "";
+    broadcastState();
+  }
+
+  public String getPwrPin() {
     return pwrPin;
   }
 
   public void setPwrPin(Integer pwrPin) {
-    this.pwrPin = pwrPin;
+    this.pwrPin = pwrPin + "";
   }
 
-  public Integer getDirPin() {
+  public String getDirPin() {
     return dirPin;
   }
 
   public void setDirPin(Integer dirPin) {
-    this.dirPin = dirPin;
+    this.dirPin = dirPin + "";
   }
 
   public Integer getPwmFreq() {
@@ -56,11 +60,10 @@ public class Motor extends AbstractMotor {
   public void setPwmFreq(Integer pwmfreq) {
     this.pwmFreq = pwmfreq;
   }
-  
+
   public static void main(String[] args) {
 
-    LoggingFactory.getInstance().configure();
-    LoggingFactory.getInstance().setLevel(Level.INFO);
+    LoggingFactory.init("info");
 
     try {
 
@@ -128,17 +131,11 @@ public class Motor extends AbstractMotor {
       m1.move(1.0);
       m1.move(-1.0);
 
-      // TODO - overload with speed?
-      m1.moveTo(250);
-      m1.moveTo(700);
-      m1.moveTo(250);
-      m1.moveTo(250);
 
       arduino.enableBoardInfo(true);
       arduino.enableBoardInfo(false);
       m1.stop();
       m1.move(0.5);
-      m1.moveTo(200);
       m1.stop();
 
       // Runtime.start("webgui", "WebGui");
@@ -167,7 +164,7 @@ public class Motor extends AbstractMotor {
     }
 
   }
-  
+
   static public ServiceType getMetaData() {
 
     ServiceType meta = new ServiceType(Motor.class.getCanonicalName());
@@ -176,6 +173,5 @@ public class Motor extends AbstractMotor {
 
     return meta;
   }
-
 
 }

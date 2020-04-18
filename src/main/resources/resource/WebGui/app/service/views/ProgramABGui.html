@@ -1,0 +1,83 @@
+<style>
+    #log-console {
+        background-color: black;
+        color: white;
+        font: 1.3rem Inconsolata, monospace;
+        border-radius: 10px;
+        margin-top: 10px;
+        margin-right: 10px;
+    }
+</style>
+<div class="col-md-12 row">
+    <div class="row form-inline btn-group">
+        <button class="btn btn-default" ng-click="startDialog()">New session</button>
+        <span ng-show="hasSession">
+            <select class="btn btn-default dropdown-toggle" ng-model="currentBotName" ng-options="key as key for (key, value) in service.sessions"></select>
+            <select class="btn btn-default dropdown-toggle" ng-model="currentUserName" ng-options="key as key for (key, value) in userNames"></select>
+            <input class="form-control col-md-6" type="text" ng-model="utterance" name="utterance" id="utterance" ng-init="" press-enter="getSessionResponse(utterance)" placeholder="type here"/>
+            <button class="btn btn-default" ng-click="getSessionResponse(utterance)">Talk</button>
+          </span>
+    </div>
+</div>
+<div class="col-md-12" class="row">
+    <table class="table">
+        <tr>
+            <td>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>chat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="chatContent in chatLog track by $index">
+                            <td nowrap>
+                                <b>{{chatContent.name}} : </b>
+                            </td>
+                            <td>
+                                <div ng-bind-html="chatContent.text"></div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+            <td>
+                <div class="row">
+                    <b>log</b>
+                </div>
+
+                <div id="log-console">
+                <br/>
+                    <div ng-repeat="logContent in log track by $index">
+                        <div ng-bind-html="logContent.text"></div>
+                    </div>
+                <br/>
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+<script type="text/ng-template" id="startDialog.html">
+    
+<div class="modal-header">
+        <button type="button" class="close" ng-click="cancel()" aria-hidden="true">&times;</button>
+        Start a new session here :
+    </div>
+        <div class="modal-body">
+        <div class="input-group">     
+            session <input class="form-control" type="text" placeholder="{{newUserName}}" ng-model="newUserName"/><br>
+            bot name 
+
+            <select class="form-control"
+            ng-model="newBotName" 
+            ng-options="o as o for o in service.availableBots">
+            </select>
+
+        </div>
+        </div>
+        <div class="modal-footer">            
+            <span class="input-group-btn"><button class="btn btn-default" ng-click="startSession(newUserName,newBotName)">start</button></span>        
+            <!-- <button ng-click="cancel()" class="btn btn-primary">Close</button> -->
+        </div>
+
+</script>

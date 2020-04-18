@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -26,15 +26,19 @@
 package org.myrobotlab.framework;
 
 import java.io.Serializable;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.myrobotlab.codec.CodecUtils;
+import org.myrobotlab.framework.interfaces.MessageListener;
 import org.myrobotlab.framework.interfaces.NameProvider;
+import org.myrobotlab.framework.interfaces.ServiceInterface;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.service.interfaces.CommunicationInterface;
+import org.myrobotlab.service.Runtime;
+import org.myrobotlab.service.interfaces.Gateway;
 import org.slf4j.Logger;
 
 /*
@@ -64,7 +68,7 @@ public class Outbox implements Runnable, Serializable {
   transient ArrayList<Thread> outboxThreadPool = new ArrayList<Thread>();
 
   public HashMap<String, ArrayList<MRLListener>> notifyList = new HashMap<String, ArrayList<MRLListener>>();
-  CommunicationInterface comm = null;
+  // CommunicationInterface comm = null;
   List<MessageListener> listeners = new ArrayList<MessageListener>();
 
   public Outbox(NameProvider myService) {
@@ -79,7 +83,7 @@ public class Outbox implements Runnable, Serializable {
     // myService.getName(), msg.sender, msg.sendingMethod, msg.name,
     // msg.method));
     synchronized (msgBox) {
-      while (blocking && msgBox.size() == maxQueue) {
+      while (blocking && (msgBox.size() >= maxQueue)) {
         // queue "full"
         try {
           // log.debug("outbox enque msg WAITING ");
@@ -92,7 +96,7 @@ public class Outbox implements Runnable, Serializable {
       // we warn if over 10 messages are in the queue - but we will still
       // process them
       if (msgBox.size() > maxQueue) {
-        log.warn(String.format("%s outbox BUFFER OVERRUN size %d", myService.getName(), msgBox.size()));
+        log.warn("{} outbox BUFFER OVERRUN size {}", myService.getName(), msgBox.size());
       }
       msgBox.addFirst(msg);
 
@@ -100,21 +104,21 @@ public class Outbox implements Runnable, Serializable {
       // msgBox.size()));
 
       if (log.isDebugEnabled()) {
-        log.debug(String.format("msg [%s]", msg.toString()));
+        log.debug("msg [{}]", msg.toString());
       }
       msgBox.notifyAll(); // must own the lock
     }
-    
+
     // now that it's actually in the queue. let's notify the listeners
     for (MessageListener ml : listeners) {
       ml.onMessage(msg);
     }
-    
+
   }
 
-  public CommunicationInterface getCommunicationManager() {
-    return comm;
-  }
+  /*
+   * public CommunicationInterface getCommunicationManager() { return comm; }
+   */
 
   // FIXME - consider using a blocking queue now that we are using Java 5.0
   @Override
@@ -150,10 +154,9 @@ public class Outbox implements Runnable, Serializable {
       // WARNING - broadcast apparently means name == ""
       // why would a message with my name be in my outbox ??? - FIXME
       // deprecate that logic
-      if (msg.name != null) { // commented out recently -> &&
-        // !myService.getName().equals(msg.name)
+      if (msg.getName() != null) {
         log.debug("{} configured to RELAY ", msg.getName());
-        comm.send(msg);
+        send(msg);
         // recently added -
         // if I'm relaying I'm not broadcasting...(i think)
         continue;
@@ -164,16 +167,16 @@ public class Outbox implements Runnable, Serializable {
         // get the value for the source method
         ArrayList<MRLListener> subList = notifyList.get(msg.sendingMethod);
         if (subList == null) {
-          log.debug(String.format("no static route for %s.%s ", msg.sender, msg.sendingMethod));
+          log.debug("no additional routes for {}.{} ", msg.sender, msg.sendingMethod);
           // This will cause issues in broadcasts
           continue;
         }
 
         for (int i = 0; i < subList.size(); ++i) {
           MRLListener listener = subList.get(i);
-          msg.name = listener.callbackName;
+          msg.setName(listener.callbackName);
           msg.method = listener.callbackMethod;
-          comm.send(msg);
+          send(msg);
 
           // must make new for internal queues
           // otherwise you'll change the name on
@@ -182,7 +185,7 @@ public class Outbox implements Runnable, Serializable {
         }
       } else {
         if (log.isDebugEnabled()) {
-          log.debug(String.format("%s/%s(%s)", msg.getName(), msg.method, CodecUtils.getParameterSignature(msg.data) + " notifyList is empty"));
+          log.debug("{}/{}({}) notifyList is empty", msg.getName(), msg.method, CodecUtils.getParameterSignature(msg.data));
         }
         continue;
       }
@@ -190,9 +193,10 @@ public class Outbox implements Runnable, Serializable {
     } // while (isRunning)
   }
 
-  public void setCommunicationManager(CommunicationInterface c) {
-    this.comm = c;
-  }
+  /*
+   * public void setCommunicationManager(CommunicationInterface c) { this.comm =
+   * c; }
+   */
 
   public int size() {
     return msgBox.size();
@@ -224,6 +228,10 @@ public class Outbox implements Runnable, Serializable {
     return maxQueue;
   }
 
+  public void setMaxQueueSize(int size) {
+    maxQueue = size;
+  }
+
   public boolean isBlocking() {
     return blocking;
   }
@@ -237,6 +245,49 @@ public class Outbox implements Runnable, Serializable {
   }
 
   public void addMessageListener(MessageListener ml) {
-    listeners .add(ml);
+    // already attached.
+    if (listeners.contains(ml))
+      return;
+    listeners.add(ml);
+  }
+
+  final public void send(final Message msg) {
+
+    try {
+
+      Runtime runtime = Runtime.getInstance();
+
+      if (runtime.isLocal(msg)) {
+        // should it invoke(potentially block) or conventionally input on in
+        // queue
+        // ?
+        ServiceInterface sw = Runtime.getService(msg.getName());
+        if (sw == null) {
+          log.info("could not find service {} to process {} from sender {} - tearing down route", msg.getName(), msg.method, msg.sender);
+          ServiceInterface sender = Runtime.getService(msg.sender);
+          if (sender != null) {
+            sender.removeListener(msg.sendingMethod, msg.getName(), msg.method);
+          }
+          return;
+        }
+
+        // if service is local - give it to that service's inbox
+        URI host = sw.getInstanceId();
+        if (host == null) {
+          sw.in(msg);
+        }
+      } else {
+        // get gateway
+        Gateway gateway = (Gateway) Runtime.getInstance().getGatway(msg.getId());
+        if (gateway == null) {
+          log.error("gateway not found for msg.id {} {}", msg.getId(), msg);
+          return;
+        }
+        gateway.sendRemote(msg);
+      }
+
+    } catch (Exception e) {
+      log.error("outbox threw", e);
+    }
   }
 }

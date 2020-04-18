@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -185,7 +185,7 @@ public class MotorGui extends ServiceGui implements ActionListener, ChangeListen
         String attachGUIName = String.format("org.myrobotlab.swing.widget.Motor_%sGui", type);
 
         controllerPanel.remove(controllerTypePanel);
-        controllerTypePanel = Reflector.getNewInstance(attachGUIName, new Object[] { myService, boundServiceName, newController });
+        controllerTypePanel = Reflector.getNewInstance(attachGUIName, new Object[] { swingGui, boundServiceName, newController });
         controllerPanel.add(controllerTypePanel, BorderLayout.CENTER);
         // setEnabled(true);
 
@@ -207,7 +207,7 @@ public class MotorGui extends ServiceGui implements ActionListener, ChangeListen
   @Override
   public void subscribeGui() {
     subscribe("publishChangePos");
-    myService.send(boundServiceName, "publishState");
+    swingGui.send(boundServiceName, "publishState");
   }
 
   @Override
@@ -225,7 +225,7 @@ public class MotorGui extends ServiceGui implements ActionListener, ChangeListen
     if (motor.isAttached()) {
       // !!!!! - This actually fires the (makes a new
       // MotorControllerPanel) !!!!!
-      MotorController mc = (MotorController)motor.getController();
+      MotorController mc = (MotorController) motor.getController();
       controllerSelect.setSelectedItem(mc.getName());
       controllerTypePanel.set(motor);
     }
@@ -256,9 +256,11 @@ public class MotorGui extends ServiceGui implements ActionListener, ChangeListen
     Object source = ce.getSource();
     if (power == source) {
       // powerValue.setText(power.getValue() + "%");
-      // powerValue.setText(String.format("in %3.2f out %3.0f", power.getScaledValue(), myMotor.getPowerMap().calcOutput(power.getScaledValue())));
+      // powerValue.setText(String.format("in %3.2f out %3.0f",
+      // power.getScaledValue(),
+      // myMotor.getPowerMap().calcOutput(power.getScaledValue())));
       powerValue.setText(String.format("in %3.2f out %3.0f", power.getScaledValue(), myMotor.getPowerLevel()));
-      myService.send(boundServiceName, "move", power.getScaledValue());
+      swingGui.send(boundServiceName, "move", power.getScaledValue());
     }
   }
 

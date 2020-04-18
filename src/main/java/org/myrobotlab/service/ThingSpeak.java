@@ -46,7 +46,7 @@ public class ThingSpeak extends Service {
 
       log.info("hello");
 
-      ThingSpeak thingSpeak = new ThingSpeak("thingSpeak");
+      ThingSpeak thingSpeak = (ThingSpeak)Runtime.start("thingSpeak", "ThingSpeak");
       thingSpeak.update(33);
       thingSpeak.startService();
 
@@ -58,8 +58,8 @@ public class ThingSpeak extends Service {
     }
   }
 
-  public ThingSpeak(String n) {
-    super(n);
+  public ThingSpeak(String n, String id) {
+    super(n, id);
   }
 
   public Integer getIntervalSeconds() {
@@ -101,7 +101,7 @@ public class ThingSpeak extends Service {
     try {
 
       if (System.currentTimeMillis() - lastUpdate < intervalSeconds * 1000) {
-        log.debug(String.format("not ready for posting - must be >= %d seconds", intervalSeconds));
+        log.debug("not ready for posting - must be >= {} seconds", intervalSeconds);
         return 0;
       }
 
@@ -119,7 +119,7 @@ public class ThingSpeak extends Service {
 
       HttpRequest request = new HttpRequest(url.toString());
       result = request.getString();
-      log.info(String.format("ThingSpeak returned %s", result));
+      log.info("ThingSpeak returned {}", result);
 
     } catch (IOException e) {
       Logging.logError(e);
@@ -152,7 +152,7 @@ public class ThingSpeak extends Service {
 
     ServiceType meta = new ServiceType(ThingSpeak.class.getCanonicalName());
     meta.addDescription("Service which can relay data to a ThingSpeak account");
-    meta.addCategory("connectivity", "cloud");
+    meta.addCategory("monitor","cloud");
     return meta;
   }
 

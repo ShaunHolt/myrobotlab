@@ -76,7 +76,7 @@ public class PortStream extends Port {
   }
 
   public boolean setParams(int rate, int databits, int stopbits, int parity) {
-    log.debug(String.format("setSerialPortParams %d %d %d %d", rate, databits, stopbits, parity));
+    log.debug("setSerialPortParams {} {} {} {}", rate, databits, stopbits, parity);
     return true;
   }
 
@@ -87,7 +87,7 @@ public class PortStream extends Port {
     // we force flushing here !
     out.flush();
   }
-  
+
   public void write(int[] data) throws IOException {
     // TODO: is there a more effecient way to do this?
     for (int i = 0; i < data.length; i++) {

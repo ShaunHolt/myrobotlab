@@ -2,330 +2,282 @@ package org.myrobotlab.service;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Stack;
-import java.util.UUID;
 
-import org.apache.commons.codec.digest.DigestUtils;
 import org.myrobotlab.framework.Platform;
 import org.myrobotlab.framework.ServiceType;
-import org.myrobotlab.io.FileIO;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
 import org.myrobotlab.service.abstracts.AbstractSpeechSynthesis;
 import org.myrobotlab.service.data.AudioData;
-import org.myrobotlab.service.interfaces.AudioListener;
-import org.myrobotlab.service.interfaces.SpeechRecognizer;
-import org.myrobotlab.service.interfaces.SpeechSynthesis;
+import org.myrobotlab.service.data.Locale;
 import org.slf4j.Logger;
 
-public class LocalSpeech extends AbstractSpeechSynthesis implements AudioListener {
+/**
+ * Local OS speech service
+ * 
+ * windows and macos compatible
+ *
+ * @author moz4r
+ *
+ *         FIXME - use sapi/creatObject if necessary Say -
+ *         https://www.lifewire.com/mac-say-command-with-talking-terminal-2260772
+ * 
+ *         Linux possibilities
+ *         https://launchpad.net/ubuntu/precise/+source/svox/
+ *         
+ *         More Voices can be found for Windows at
+ *         https://www.microsoft.com/en-us/download/details.aspx?id=3971
+ *         
+ *         ESPEAK - 
+ *            list voices :
+ *                espeak --voices  
+ *            use voice :
+ *                espeak  -v en "Hello world, how are you doing today?"
+ *                espeak  -v en-sc "Hello world, how are you doing today?"
+ *                
+ *            using mbrola voice
+ *            install voice :
+ *                sudo apt-get install mbrola mbrola-us3 mbrola-en1 ...
+ *            use voice :
+ *                espeak -v mb-en1 "Hello world"
+ *                espeak -v mb-en1 "Hello world" -w out.wav
+ *                espeak -f speak.txt -v mb-en1 -w out.wav
+ *                espeak  -v mb-us1 "Hello world, how are you doing today?"
+ *                
+ *                
+ *         MBROLA voices - https://github.com/espeak-ng/espeak-ng/blob/master/docs/mbrola.md#linux-installation
+ * 
+ */
+public class LocalSpeech extends AbstractSpeechSynthesis {
 
   private static final long serialVersionUID = 1L;
 
   public final static Logger log = LoggerFactory.getLogger(LocalSpeech.class);
+  private String ttsPath = System.getProperty("user.dir") + File.separator + "tts" + File.separator + "tts.exe";
 
-  transient Integer voice = 0;
-  transient String voiceName = "0";
-  transient List<Integer> voices;
-
-  private String ttsFolder = "tts";
-  private String audioCacheExtension = "mp3";  
-
-  private String windowsTtsExecutable = ttsFolder + File.separator + "tts.exe";
-  private String macOsTtsExecutable = "say";
-  // TODO private String linuxTtsExecutable = "";
-
-  public String ttsExeOutputFilePath = System.getProperty("user.dir") + File.separator + ttsFolder + File.separator;
-  boolean ttsExecutableExist;
-
-  // this is a peer service.
-  transient AudioFile audioFile = null;
-
-  transient Map<Integer, String> voiceMap = new HashMap<Integer, String>();
-
-  Stack<String> audioFiles = new Stack<String>();
-
-  transient HashMap<AudioData, String> utterances = new HashMap<AudioData, String>();
-
-  String language = "en";
-
-  public LocalSpeech(String n) {
-    super(n);
+  public LocalSpeech(String n, String id) {
+    super(n, id);
   }
 
-  @Override
-  public List<String> getVoices() {
-    if (Platform.getLocalInstance().isWindows()) {
-      ArrayList<String> args = new ArrayList<String>();
-      args.add("-V");
-      String cmd = Runtime.execute(System.getProperty("user.dir") + File.separator + windowsTtsExecutable, "-V");
-      String[] lines = cmd.split(System.getProperty("line.separator"));
-      List<String> voiceList = (List<String>) Arrays.asList(lines);
-
-      for (int i = 0; i < voiceList.size() && i < 10; i++) {
-        // error(voiceList.get(i).substring(0,2));
-        if (voiceList.get(i).substring(0, 1).matches("\\d+")) {
-          voiceMap.put(i, voiceList.get(i).substring(2, voiceList.get(i).length()));
-          log.info("voice : " + voiceMap.get(i) + " index : " + i);
-        }
-      }
-      return voiceList;
-    }
-    return null;
-  }
-
-  @Override
-  public boolean setVoice(String voice) {
-    // macos get voices not necessaries
-    if (Platform.getLocalInstance().isWindows()) {
-      getVoices();
-      Integer voiceId = Integer.parseInt(voice);
-      if (voiceMap.containsKey(voiceId)) {
-        this.voiceName = voiceMap.get(voiceId);
-        this.voice = voiceId;
-        log.info("setting voice to {}", voice, "( ", voiceName, " ) ");
-        return true;
-      }
-      error("could not set voice to {}", voice);
-      return false;
-    }
-    info("could not set voice to {}", voice);
-    return false;
-  }
-
-  @Override
-  public void setLanguage(String l) {
-    this.language = l;
-  }
-
-  @Override
-  public String getLanguage() {
-    return language;
-  }
-
-  public byte[] cacheFile(String toSpeak) throws IOException {
-    byte[] mp3File = null;
-    String localFileName = getLocalFileName(this, toSpeak, audioCacheExtension);
-    if (voiceName == null) {
-      setVoice(voice.toString());
-    }
-
-    String uuid = UUID.randomUUID().toString();
-    if (!audioFile.cacheContains(localFileName)) {
-      log.info("retrieving speech from locals - {}", localFileName, voiceName);
-      String command = System.getProperty("user.dir") + File.separator + windowsTtsExecutable + " -f 9 -v " + voice + " -t -o " + ttsExeOutputFilePath + uuid + " \"" + toSpeak
-          + " \"";
-      String cmd = "null";
-      File f = new File(ttsExeOutputFilePath + uuid + "0."+audioCacheExtension);
-      // windows os local tts
-      if (Platform.getLocalInstance().isWindows()) {
-        f=new File(ttsExeOutputFilePath + uuid + "0."+audioCacheExtension);
-        f.delete();
-        cmd = Runtime.execute("cmd.exe", "/c", command);
-      }
-      // macos local tts ( it is WAVE not mp3, but worky... )
-      // TODO : Convert to mp3
-      if (Platform.getLocalInstance().isMac()) {
-        f=new File(ttsExeOutputFilePath + uuid + "0.AIFF");
-        f.delete();
-        cmd = Runtime.execute(macOsTtsExecutable, toSpeak, "-o", ttsExeOutputFilePath + uuid + "0.AIFF");
-      }
-      log.info(cmd);
-      if (!f.exists()) {
-        log.error("local tts caused an error : " + cmd);
-      } else {
-        if (f.length() == 0) {
-          log.error("local tts caused an error : empty file " + cmd);
-        } else {
-          mp3File = FileIO.toByteArray(f);
-          audioFile.cache(localFileName, mp3File, toSpeak);
-        }
-        f.delete();
-      }
-
-    } else {
-      log.info("using local cached file");
-      mp3File = FileIO.toByteArray(new File(AudioFile.globalFileCacheDir + File.separator + getLocalFileName(this, toSpeak, audioCacheExtension)));
-    }
-
-    return mp3File;
-  }
-
-  @Override
-  public AudioData speak(String toSpeak) throws Exception {
-    toSpeak = toSpeak.replaceAll("\\s{2,}", " ");
-    cacheFile(toSpeak);
-    AudioData audioData = audioFile.playCachedFile(getLocalFileName(this, toSpeak, audioCacheExtension));
-    utterances.put(audioData, toSpeak);
-    return audioData;
-  }
-
-  @Override
-  public String publishStartSpeaking(String utterance) {
-    log.info("publishStartSpeaking {}", utterance);
-    return utterance;
-  }
-
-  @Override
-  public String publishEndSpeaking(String utterance) {
-    log.info("publishEndSpeaking {}", utterance);
-    return utterance;
-  }
-
-  @Override
-  public void onAudioStart(AudioData data) {
-    log.info("onAudioStart {} {}", getName(), data.toString());
-    // filters on only our speech
-    if (utterances.containsKey(data)) {
-      String utterance = utterances.get(data);
-      invoke("publishStartSpeaking", utterance);
-    }
-  }
-
-  @Override
-  public void onAudioEnd(AudioData data) {
-    log.info("onAudioEnd {} {}", getName(), data.toString());
-    // filters on only our speech
-    if (utterances.containsKey(data)) {
-      String utterance = utterances.get(data);
-      invoke("publishEndSpeaking", utterance);
-      utterances.remove(data);
-    }
-  }
-
-  @Override
-  public boolean speakBlocking(String toSpeak) throws Exception {
-    toSpeak = toSpeak.replaceAll("\\s{2,}", " ");
-    cacheFile(toSpeak);
-    invoke("publishStartSpeaking", toSpeak);
-    audioFile.playBlocking(AudioFile.globalFileCacheDir + File.separator + getLocalFileName(this, toSpeak, audioCacheExtension));
-    invoke("publishEndSpeaking", toSpeak);
-    return false;
-  }
-
-  @Override
-  public void setVolume(float volume) {
-    audioFile.setVolume(volume);
-  }
-
-  @Override
-  public float getVolume() {
-    return audioFile.getVolume();
-  }
-
-  @Override
-  public void interrupt() {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public String getVoice() {
-    return voice.toString();
-  }
-
-  @Override
-  public String getLocalFileName(SpeechSynthesis provider, String toSpeak, String audioFileType) throws UnsupportedEncodingException {
-    // TODO: make this a base class sort of thing.
-    // having - AudioFile.globalFileCacheDir exposed like this is a bad idea ..
-    // AudioFile should just globallyCache - the details of that cache should
-    // not be exposed :(
-
-    return provider.getClass().getSimpleName() + File.separator + URLEncoder.encode(provider.getVoice(), "UTF-8") + File.separator + DigestUtils.md5Hex(toSpeak) + "."
-        + audioFileType;
-
-  }
-
-  // can this be defaulted ?
-  @Override
-  public void addEar(SpeechRecognizer ear) {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void onRequestConfirmation(String text) {
-    // TODO Auto-generated method stub
-
-  }
-
-  /**
-   * This static method returns all the details of the class without it having
-   * to be constructed. It has description, categories, dependencies, and peer
-   * definitions.
-   * 
-   * @return ServiceType - returns all the data
-   * 
-   */
   static public ServiceType getMetaData() {
 
-    ServiceType meta = new ServiceType(LocalSpeech.class.getCanonicalName());
+    ServiceType meta = AbstractSpeechSynthesis.getMetaData(LocalSpeech.class.getCanonicalName());
+    meta.addCategory("speech", "sound");
     meta.addDescription("Local OS text to speech ( tts.exe / say etc ... )");
-    meta.setAvailable(true); // false if you do not want it viewable in a
-    // gui
-    // add dependency if necessary
-    meta.addPeer("audioFile", "AudioFile", "audioFile");
+    meta.setAvailable(true);
     meta.addCategory("speech");
     meta.addDependency("com.microsoft", "tts", "1.1", "zip");
     return meta;
   }
 
   @Override
-  public void startService() {
-    super.startService();
-    audioFile = (AudioFile) startPeer("audioFile");
-    audioFile.startService();
-    subscribe(audioFile.getName(), "publishAudioStart");
-    subscribe(audioFile.getName(), "publishAudioEnd");
-    // attach a listener when the audio file ends playing.
-    audioFile.addListener("finishedPlaying", this.getName(), "publishEndSpeaking");
-    File f = new File(System.getProperty("user.dir") + File.separator + windowsTtsExecutable);
-    ttsExecutableExist = true;
+  public AudioData generateAudioData(AudioData audioData, String toSpeak) throws IOException, InterruptedException {
 
-    if (!new File(System.getProperty("user.dir") + File.separator + ttsFolder).exists()) {
-      File dir = new File(ttsFolder);
-      dir.mkdir();
-    }
-    if (!f.exists() && Platform.getLocalInstance().isWindows()) {
-      error("Missing : " + System.getProperty("user.dir") + File.separator + windowsTtsExecutable);
-      ttsExecutableExist = false;
-    }
-    if (Platform.getLocalInstance().isLinux()) {
-      error("generic Linux local tts not yet implemented, want help ?");
-    }
-    if (Platform.getLocalInstance().isMac()) {
-      this.audioCacheExtension="AIFF";
+    String localFileName = getLocalFileName(toSpeak);
+
+    Platform platform = Runtime.getPlatform();
+    String filename = getLocalFileName(toSpeak);
+    if (filename == null) {
+      return null;
     }
     
-    
+    if (platform.isWindows()) {
+      // GAH ! .. tts.exe isn't like a Linux app where -o means output file to
+      // "exact" name ...
+      // unfortunately it appends .mp3 :P
+      // so here we have to trim it off
 
+      filename = filename.substring(0, filename.length() - 5);
+      String cmd = "\"" + ttsPath + "\" -f 9 -v " + getVoice().getVoiceProvider().toString() + " -t -o " + "\"" + filename + "\" \"" + toSpeak + "\"";
+      Runtime.execute("cmd.exe", "/c", "\"" + cmd + "\"");
+    } else if (platform.isMac()) {
+      // cmd = Runtime.execute(macOsTtsExecutable, toSpeak, "-o",
+      // ttsExeOutputFilePath + uuid + "0.AIFF");
+      String cmd = "say \"" + toSpeak + "\"" + "-o " + filename;
+      Runtime.execute(cmd);
+    } else if (platform.isLinux()) {
+      // ProcessBuilder pb = new ProcessBuilder()
+      // cmd = getOsTtsApp(); // FIXME IMPLEMENT !!!
+      String furtherFiltered = toSpeak.replace("\"", "");// .replace("\'",
+      // "").replace("|",
+      // "");
+      // Runtime.exec("bash", "-c", "echo \"" + furtherFiltered + "\" | festival
+      // --tts");
+      
+      // apt install espeak 
+      // sudo apt-get install mbrola mbrola-en1
+      // espeak -f speak.txt -w out.wav 
+      // espeak -ven-sc -f speak.txt -w out.wav
+      Process p = Runtime.exec("bash", "-c", "echo \"" + furtherFiltered + "\" | text2wave -o " + localFileName);
+      // TODO : use (!p.waitFor(10, TimeUnit.SECONDS)) for security ?
+      p.waitFor();
+      // audioFile.play(audioData);
+    }
+
+    /*
+     * String cmd = getTtsCmdLine(toSpeak);
+     * 
+     * 
+     */
+    File fileTest = new File(localFileName);
+    if (fileTest.exists() && fileTest.length() > 0) {
+      return new AudioData(localFileName);
+    } else {
+      if (platform.isLinux()) {
+        error("0 byte file - is festival installed?  apt install festival");
+      } else {
+        error("%s returned 0 byte file !!! - it may block you", getName());
+      }
+      return null;
+    }
   }
+
+  /**
+   * overridden because mac is silly for not being mp3 and ms tts is a mess
+   * because it appends 0.mp3 :P
+   */
+  public String getAudioCacheExtension() {
+    if (Platform.getLocalInstance().isMac()) {
+      return ".aiff";
+    } else if (Platform.getLocalInstance().isWindows()) {
+      return "0.mp3"; // ya stoopid no ?
+    }
+    return ".wav"; // hopefully Linux festival can do this (if not can we ?)
+  }
+
+  /**
+   * one of the few methods a SpeechSynthesis service must implement if derived
+   * from AbstractSpeechSynthesis -
+   * 
+   * Use protected addVoice(name, gender, lang, voiceProvider) to add voices
+   * Voice.voiceProvider allows a serializable key to map MRL's Voice to a
+   * implementation of a voice
+   */
+  @Override
+  protected void loadVoices() {
+
+    if (voices.size() > 0) {
+      log.info("already loaded voices");
+      return;
+    }
+
+    Platform platform = Platform.getLocalInstance();
+
+    // voices returned from local app
+    String voicesText = null;
+
+    if (platform.isWindows()) {
+      voicesText = Runtime.execute("cmd.exe", "/c", "\"\"" + ttsPath + "\"" + " -V" + "\"");
+
+      log.info("cmd {}", voicesText);
+
+      String[] lines = voicesText.split(System.getProperty("line.separator"));
+      for (String line : lines) {
+        // String[] parts = cmd.split(" ");
+        // String gender = "female"; // unknown
+        String lang = "en-US"; // unknown
+
+        if (line.startsWith("Exit")) {
+          break;
+        }
+        String[] parts = line.split(" ");
+        if (parts.length < 2) { // some voices are not based on a standard pattern
+          continue;
+        }
+        // lame-ass parsing ..
+        // standard sapi pattern is 5 parameters :
+        // INDEX PROVIDER VOICE_NAME PLATEFORM - LANG
+        // we need INDEX, VOICE_NAME, LANG
+        // but .. some voices dont use it, we will try to detect pattern and adapt if no respect about it :
+
+        // INDEX :
+        String voiceProvider = parts[0];
+
+        // VOICE_NAME
+        String voiceName = "Unknown" + voiceProvider; //default name if there is an issue
+        // it is standard, cool
+        if (parts.length >= 6) {
+          voiceName = parts[2];//line.trim();
+        }
+        // almost standard, we have INDEX PROVIDER VOICE_NAME
+        else if (parts.length > 2) {
+          voiceName = line.split(" ")[2];
+        }
+        // non standard at all ... but we catch it !
+        else {
+          voiceName = line.split(" ")[1];
+        }
+
+        // LANG ( we just detect for a keyword inside the whole string, because position is random sometime )
+        // TODO: locale converter from keyword somewhere ?
+
+        if (line.toLowerCase().contains("french") || line.toLowerCase().contains("français")) {
+          lang = "fr-FR";
+        }
+
+        try {
+          // verify integer
+          Integer.parseInt(voiceProvider);
+          // voice name cause issues because of spaces or (null), let's just use
+          // original number as name...
+          addVoice(voiceName, null, lang, voiceProvider);
+        } catch (Exception e) {
+          continue;
+        }
+      }
+    } else if (platform.isMac()) {
+      // https://www.lifewire.com/mac-say-command-with-talking-terminal-2260772
+      voicesText = Runtime.execute("say -v");
+
+      // FIXME - implement parse -v output
+      addVoice("fred", "male", "en-US", "fred"); // in the interim added 1 voice
+    } else if (platform.isLinux()) {
+      addVoice("Linus", "male", "en-US", "festival");
+    }
+  }
+
+  /**
+   * override default tts.exe path
+   * 
+   * @param ttsPath
+   *          - full path to windows tts.exe executable TODO - override also
+   *          other os
+   */
+  public void setTtsPath(String ttsPath) {
+    this.ttsPath = ttsPath;
+  }
+
+  public String getTtsPath() {
+    return ttsPath;
+  }
+  
+
+  @Override
+  public Map<String, Locale> getLocales() {
+    return Locale.getLocaleMap("en-US");
+  }
+
 
   public static void main(String[] args) throws Exception {
 
     LoggingFactory.init(Level.INFO);
+    Runtime.start("gui", "SwingGui");
 
-    LocalSpeech localSpeech = (LocalSpeech) Runtime.start("localSpeech", "LocalSpeech");
-    // microsoftLocalTTS.ttsExeOutputFilePath="c:\\tmp\\";
-    localSpeech.getVoices();
-    localSpeech.setVoice("1");
-    localSpeech.speakBlocking("local tts");
-    localSpeech.speak("unicode éléphant");
+    LocalSpeech speech = (LocalSpeech) Runtime.start("speech", "LocalSpeech");
+    speech.speakBlocking("hello my name is sam, sam i am");
+    // speech.parseEffects("#OINK##OINK# hey I thought #DOH# that was funny
+    // #LAUGH01_F# very funny");
+    // speech.getVoices();
+    // speech.setVoice("1");
+    /*
+     * speech.speak(String.format("hello yes yes yes, my voice name is %s",
+     * speech.getVoice().getName()));
+     * speech.speakBlocking("I am your R 2 D 2 here me speak #R2D2#");
+     * speech.speak("unicode éléphant");
+     */
 
-  }
-
-  @Override
-  public List<String> getLanguages() {
-    // TODO Auto-generated method stub
-    return null;
   }
 
 }

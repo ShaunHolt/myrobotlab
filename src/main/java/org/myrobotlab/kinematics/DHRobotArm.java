@@ -14,13 +14,13 @@ public class DHRobotArm implements Serializable {
 
   transient public final static Logger log = LoggerFactory.getLogger(DHRobotArm.class);
 
-  private int maxIterations = 1000;
+  private int maxIterations = 10000;
 
   private ArrayList<DHLink> links;
-  
+
   public String name;
 
-  // for debugging ..
+  // for debugging .. hmmm
   public transient InverseKinematics3D ik3D = null;
 
   public DHRobotArm() {
@@ -32,10 +32,11 @@ public class DHRobotArm implements Serializable {
     super();
     name = copy.name;
     links = new ArrayList<DHLink>();
-    for (DHLink link:copy.links) {
+    for (DHLink link : copy.links) {
       links.add(new DHLink(link));
     }
   }
+
   public ArrayList<DHLink> addLink(DHLink link) {
     links.add(link);
     return links;
@@ -80,7 +81,7 @@ public class DHRobotArm implements Serializable {
     // deltaTheta[i] to delta[x,y,z]
     Matrix jInverse = jacobian.pseudoInverse();
     // log.debug("Pseudo inverse Jacobian(p)approx\n" + jInverse);
-    if (jInverse == null){
+    if (jInverse == null) {
       jInverse = new Matrix(3, numLinks);
     }
     return jInverse;
@@ -148,9 +149,10 @@ public class DHRobotArm implements Serializable {
   }
 
   /**
-   * @param lastDHLink the index of the link that you want the global position at.
+   * @param lastDHLink
+   *          the index of the link that you want the global position at.
    * @return the x,y,z of the palm. roll,pitc, and yaw are not returned/computed
-   * with this function
+   *         with this function
    */
   public Point getPalmPosition(String lastDHLink) {
     // TODO Auto-generated method stub
@@ -173,13 +175,13 @@ public class DHRobotArm implements Serializable {
     // log.debug("-------------------------");
     // log.debug(m);
     // TODO: validate this approach..
-    for (int i = 0; i < links.size(); i++){
+    for (int i = 0; i < links.size(); i++) {
       Matrix s = links.get(i).resolveMatrix();
       // log.debug(s);
       m = m.multiply(s);
       // log.debug("-------------------------");
       // log.debug(m);
-      if (links.get(i).getName()!= null && links.get(i).getName().equals(lastDHLink)) {
+      if (links.get(i).getName() != null && links.get(i).getName().equals(lastDHLink)) {
         break;
       }
     }
@@ -191,35 +193,32 @@ public class DHRobotArm implements Serializable {
     // double ws = m.elements[3][3];
     // log.debug("World Scale : " + ws);
     // TODO: pass /compute the roll pitch and yaw ..
-    double pitch = Math.atan2(-1.0*(m.elements[2][0]), Math.sqrt(m.elements[0][0]*m.elements[0][0] + m.elements[1][0]*m.elements[1][0]));
+    double pitch = Math.atan2(-1.0 * (m.elements[2][0]), Math.sqrt(m.elements[0][0] * m.elements[0][0] + m.elements[1][0] * m.elements[1][0]));
     double roll = 0;
     double yaw = 0;
-    if (pitch == Math.PI/2) {
-      roll =  Math.atan2(m.elements[0][1], m.elements[1][1]);
+    if (pitch == Math.PI / 2) {
+      roll = Math.atan2(m.elements[0][1], m.elements[1][1]);
+    } else if (pitch == -1 * Math.PI / 2) {
+      roll = Math.atan2(m.elements[0][1], m.elements[1][1]) * -1;
+    } else {
+      roll = Math.atan2(m.elements[2][1] / Math.cos(pitch), m.elements[2][2]) / Math.cos(pitch);
+      yaw = Math.atan2(m.elements[1][0] / Math.cos(pitch), m.elements[0][0] / Math.cos(pitch)) - Math.PI / 2;
     }
-    else if (pitch == -1 * Math.PI/2) {
-      roll = Math.atan2(m.elements[0][1], m.elements[1][1]) *-1;
-    }
-    else {
-      roll = Math.atan2(m.elements[2][1]/Math.cos(pitch), m.elements[2][2])/Math.cos(pitch);
-      yaw = Math.atan2(m.elements[1][0]/Math.cos(pitch), m.elements[0][0]/Math.cos(pitch)) - Math.PI/2;
-    }
-//    double pitch=0, roll=0, yaw=0; //attitude, bank, heading
-//    if (m.elements[1][0] > 0.998) {
-//      yaw = Math.atan2(m.elements[0][2], m.elements[2][2]);
-//      pitch = Math.PI/2;
-//    }
-//    else if (m.elements[1][0] < -0.998) {
-//      yaw = Math.atan2(m.elements[0][2], m.elements[2][2]);
-//      pitch = -Math.PI/2;
-//    }
-//    else {
-//      yaw = Math.atan2(-m.elements[2][0], m.elements[0][0]);
-//      roll = Math.atan2(-m.elements[1][2], m.elements[1][1]);
-//      pitch = Math.asin(m.elements[1][0]);
-//    }
+    // double pitch=0, roll=0, yaw=0; //attitude, bank, heading
+    // if (m.elements[1][0] > 0.998) {
+    // yaw = Math.atan2(m.elements[0][2], m.elements[2][2]);
+    // pitch = Math.PI/2;
+    // }
+    // else if (m.elements[1][0] < -0.998) {
+    // yaw = Math.atan2(m.elements[0][2], m.elements[2][2]);
+    // pitch = -Math.PI/2;
+    // }
+    // else {
+    // yaw = Math.atan2(-m.elements[2][0], m.elements[0][0]);
+    // roll = Math.atan2(-m.elements[1][2], m.elements[1][1]);
+    // pitch = Math.asin(m.elements[1][0]);
+    // }
     Point palm = new Point(x, y, z, pitch * 180 / Math.PI, roll * 180 / Math.PI, yaw * 180 / Math.PI);
-    
 
     return palm;
   }
@@ -227,7 +226,7 @@ public class DHRobotArm implements Serializable {
   public void centerAllJoints() {
     for (DHLink link : links) {
       double center = (link.getMax() + link.getMin()) / 2.0;
-      log.info("Centering Servo {} to {} degrees", link.getName(), center);
+      log.debug("Centering Servo {} to {} degrees", link.getName(), center);
       link.setTheta(center);
     }
   }
@@ -235,13 +234,14 @@ public class DHRobotArm implements Serializable {
   public boolean moveToGoal(Point goal) {
     // we know where we are.. we know where we want to go.
     int numSteps = 0;
-    double iterStep = 0.25;
-    double errorThreshold = 0.05;
+    double iterStep = 0.05;
+    // we're in millimeters.. 
+    double errorThreshold = 2.0;
     // what's the current point
     while (true) {
       numSteps++;
       if (numSteps >= maxIterations) {
-        log.info("Attempted to iterate there, but didn't make it. giving up.");
+        log.info("Attempted to iterate, didn't make it. Current Position: {} Goal: {} Distance: {}", getPalmPosition(), goal, goal.distanceTo(getPalmPosition()));
         // we shouldn't publish if we don't solve!
         return false;
       }
@@ -281,8 +281,7 @@ public class DHRobotArm implements Serializable {
       // }
 
       if (deltaPoint.magnitude() < errorThreshold) {
-        // log.debug("Final Position {} Number of Iterations {}" ,
-        // getPalmPosition() , numSteps);
+        log.info("Final Position {} Number of Iterations {}", getPalmPosition(), numSteps);
         break;
       }
     }
@@ -298,14 +297,14 @@ public class DHRobotArm implements Serializable {
   }
 
   public boolean armMovementEnds() {
-  	for (DHLink link: links) {
-  		if (link.getState() != Servo.SERVO_EVENT_STOPPED) {
-  			return false;
-  		}
-  	}
-  	return true;
+    for (DHLink link : links) {
+      // if (link.getState() != Servo.SERVO_EVENT_STOPPED) {
+      //  return false;
+      // }
+    }
+    return true;
   }
-  
+
   public double[][] createJointPositionMap() {
 
     double[][] jointPositionMap = new double[getNumLinks() + 1][3];
@@ -325,10 +324,10 @@ public class DHRobotArm implements Serializable {
   }
 
   public Point getVector() {
-    Point lastJoint = getJointPosition(links.size()-1);
-    Point previousJoint = getJointPosition(links.size()-2);
+    Point lastJoint = getJointPosition(links.size() - 1);
+    Point previousJoint = getJointPosition(links.size() - 2);
     Point retval = lastJoint.subtract(previousJoint);
-    
+
     return retval;
   }
 

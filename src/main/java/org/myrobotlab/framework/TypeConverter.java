@@ -39,11 +39,16 @@ public class TypeConverter {
    * this method tries to get the appropriate 'Typed parameter array for a
    * specific method It "converts" parameters of strings into typed parameters
    * which can then be used to reflectively invoke the appropriate method
-   * @param clazz c
-   * @param method m
-   * @param stringParams p 
+   * 
+   * @param clazz
+   *          c
+   * @param method
+   *          m
+   * @param stringParams
+   *          p
    * @return object array
-   * @throws IOException e
+   * @throws IOException
+   *           e
    * 
    */
   static public Object[] getTypedParamsFromJson(Class<?> clazz, String method, String[] stringParams) throws IOException {
@@ -66,7 +71,7 @@ public class TypeConverter {
             Class<?> pType = types[j];
             String param = stringParams[j];
 
-            log.debug(String.format("attempting conversion into %s from inbound data %s", pType.getSimpleName(), stringParams[j]));
+            log.debug("attempting conversion into {} from inbound data {}", pType.getSimpleName(), stringParams[j]);
             if (pType == String.class) {
               // escape quotes
               param = param.replaceAll("\"", "\\\"");

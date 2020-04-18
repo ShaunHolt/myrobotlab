@@ -1,20 +1,21 @@
 package org.myrobotlab.framework;
 
-import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.Map;
+import java.util.Properties;
 import java.util.TreeMap;
-import java.util.jar.Attributes;
-import java.util.jar.Manifest;
+import java.util.zip.ZipFile;
+
+import org.myrobotlab.lang.NameGenerator;
+import org.myrobotlab.logging.Level;
+import org.myrobotlab.logging.LoggerFactory;
+import org.myrobotlab.logging.LoggingFactory;
+import org.slf4j.Logger;
 
 /**
  * The purpose of this class is to retrieve all the detailed information
@@ -22,9 +23,14 @@ import java.util.jar.Manifest;
  * 
  * It must NOT have references to mrl services, or Runtime, or 3rd party library
  * dependencies except perhaps for logging
+ * 
+ * FIXME - it's silly to have some values in variables and others in the manifest map - 
+ * probably should have all in a Tree map but I didn't want to break any javascript which accessed
+ * the members directly
  *
  */
 public class Platform implements Serializable {
+  transient static Logger log = LoggerFactory.getLogger(Platform.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -46,10 +52,13 @@ public class Platform implements Serializable {
   // non-changing values
   String os;
   String arch;
-  int bitness;
+  int osBitness;
+  int jvmBitness;
+  String lang = "java";
   String vmName;
   String vmVersion;
   String mrlVersion;
+  boolean isVirtual = false;
 
   /**
    * Static identifier to identify the "instance" of myrobotlab - similar to
@@ -65,7 +74,10 @@ public class Platform implements Serializable {
   String motd;
   Date startTime;
 
-  static Platform localInstance; // = getLocalInstance();
+  // all values of the manifest
+  Map<String, String> manifest;
+
+  static Platform localInstance;
 
   /**
    * The one big convoluted function to get all the crazy platform specific
@@ -76,16 +88,17 @@ public class Platform implements Serializable {
    * If the local instance is desired. If its from a serialized instance, the
    * "getters" will be retrieving appropriate info for that serialized instance.
    * 
-   * @return
+   * @return - return the local instance of the current platform
    */
   public static Platform getLocalInstance() {
 
     if (localInstance == null) {
+      log.debug("initializing Platform");
+      
       Platform platform = new Platform();
-
       platform.startTime = new Date();
 
-      // os
+      // === OS ===
       platform.os = System.getProperty("os.name").toLowerCase();
       if (platform.os.indexOf("win") >= 0) {
         platform.os = OS_WINDOWS;
@@ -98,26 +111,13 @@ public class Platform implements Serializable {
       platform.vmName = System.getProperty("java.vm.name");
       platform.vmVersion = System.getProperty("java.specification.version");
 
-      // bitness
-      String model = System.getProperty("sun.arch.data.model");
-      if ("64".equals(model)) {
-        platform.bitness = 64;
-      } else {
-        platform.bitness = 32;
-      }
-
-      // arch
+      // === ARCH ===
       String arch = System.getProperty("os.arch").toLowerCase();
-      if ("i386".equals(arch) || "i686".equals(arch) || "i586".equals(arch) || "amd64".equals(arch) || arch.startsWith("x86")) {
+      if ("i386".equals(arch) || "i486".equals(arch) || "i586".equals(arch) || "i686".equals(arch) || "amd64".equals(arch) || arch.startsWith("x86")) {
         platform.arch = "x86"; // don't care at the moment
       }
 
       if ("arm".equals(arch)) {
-
-        // FIXME - procparser is unsafe and borked !!
-        // Integer armv = ProcParser.getArmInstructionVersion();
-        // Current work around: trigger off the os.version to choose
-        // arm6 or arm7
 
         // assume ras pi 1 .
         Integer armv = 6;
@@ -141,25 +141,41 @@ public class Platform implements Serializable {
         platform.arch = arch;
       }
 
-      // REMOVED EVIL RECURSION - you can't call a file which has static
-      // logging !!
-      // logging calls -> platform calls a util class -> calls logging --
-      // infinite loop
-
-      StringBuffer sb = new StringBuffer();
-
-      try {
-        BufferedReader br = new BufferedReader(new InputStreamReader(Platform.class.getResourceAsStream("/resource/version.txt"), "UTF-8"));
-        for (int c = br.read(); c != -1; c = br.read()) {
-          sb.append((char) c);
+      // === BITNESS ===
+      if (platform.isWindows()) {
+        // https://blogs.msdn.microsoft.com/david.wang/2006/03/27/howto-detect-process-bitness/
+        // this will attempt to guess the bitness of the underlying OS, Java
+        // tries very hard to hide this from running programs
+        String procArch = System.getenv("PROCESSOR_ARCHITECTURE");
+        String procArchWow64 = System.getenv("PROCESSOR_ARCHITEW6432");
+        platform.osBitness = (procArch != null && procArch.endsWith("64") || procArchWow64 != null && procArchWow64.endsWith("64")) ? 64 : 32;
+        switch (arch) {
+          case "x86":
+          case "i386":
+          case "i486":
+          case "i586":
+          case "i686":
+            platform.jvmBitness = 32;
+            break;
+          case "x86_64":
+          case "amd64":
+            platform.jvmBitness = 64;
+            break;
+          default:
+            platform.jvmBitness = 0; // ooops, I guess
+            break;
         }
-        if (sb.length() > 0) {
-          platform.mrlVersion = sb.toString();
-        }
-      } catch (Exception e) {
-        // no logging silently die
+      } else {
+        // this is actually a really bad way of doing jvm bitness (may return
+        // "64","32" or "unknown") - and is sometimes simply not there at all
+        // keeping this as a fallback for all Linux and Mac machines,
+        // I don't know enough to implement a more robust detection for them
+        // (and this was here before me, so it has to be good)
+        String model = System.getProperty("sun.arch.data.model");
+        platform.jvmBitness = "64".equals(model) ? 64 : 32;
       }
 
+      // === MRL ===
       if (platform.mrlVersion == null) {
         SimpleDateFormat format = new SimpleDateFormat("yyyy.MM.dd");
         platform.mrlVersion = format.format(new Date());
@@ -167,27 +183,13 @@ public class Platform implements Serializable {
 
       // manifest
       Map<String, String> manifest = getManifest();
-
-      if (manifest.containsKey("Branch")) {
-        platform.branch = manifest.get("Branch");
-      } else {
-        platform.branch = "develop";
-      }
-
-      if (manifest.containsKey("Commit")) {
-        platform.commit = manifest.get("Commit");
-      } else {
-        platform.commit = "unknown";
-      }
-
-      if (manifest.containsKey("Implementation-Version")) {
-        platform.mrlVersion = manifest.get("Implementation-Version");
-      } else {
-        platform.mrlVersion = "unknown";
-      }
+      platform.manifest = manifest;
+      platform.branch = get(manifest, "GitBranch", "unknownBranch");
+      platform.commit = get(manifest, "GitCommitIdAbbrev", "unknownCommit");
+      platform.mrlVersion = get(manifest, "Implementation-Version", "unknownVersion");
 
       // motd
-      platform.motd = "You Know, for Creative Machine Control !";
+      platform.motd = "resistance is futile, we have cookies and robots ...";
 
       // hostname
       try {
@@ -223,8 +225,14 @@ public class Platform implements Serializable {
 
       localInstance = platform;
     }
-
     return localInstance;
+  }
+
+  static public String get(Map<String,String> manifest, String key, String def) {
+    if (manifest != null & manifest.containsKey(key)) {
+      return manifest.get(key);
+    }
+    return def;
   }
 
   public Platform() {
@@ -254,16 +262,12 @@ public class Platform implements Serializable {
     return arch;
   }
 
-  public int getBitness() {
-    return bitness;
+  public int getOsBitness() {
+    return osBitness;
   }
 
-  public String getClassPathSeperator() {
-    if (isWindows()) {
-      return ";";
-    } else {
-      return ":";
-    }
+  public int getJvmBitness() {
+    return jvmBitness;
   }
 
   public String getOS() {
@@ -271,7 +275,7 @@ public class Platform implements Serializable {
   }
 
   public String getPlatformId() {
-    return String.format("%s.%s.%s", getArch(), getBitness(), getOS());
+    return String.format("%s.%s.%s", getArch(), getJvmBitness(), getOS());
   }
 
   public String getVersion() {
@@ -306,99 +310,66 @@ public class Platform implements Serializable {
     return getArch().equals(ARCH_X86);
   }
 
-  static public final String getRoot() {
-    try {
-
-      String source = Platform.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-      System.out.println("getRoot " + source);
-      return source;
-    } catch (Exception e) {
-      System.out.println("getRoot threw " + e.getMessage());
-      return null;
-    }
-  }
-
   static public Map<String, String> getManifest() {
     Map<String, String> ret = new TreeMap<String, String>();
+    ZipFile zf = null;
     try {
-      File f = new File(getRoot());
-      Class<?> clazz = Platform.class;
-      String className = clazz.getSimpleName() + ".class";
-      String classPath = clazz.getResource(className).toString();
+      log.debug("getManifest");
+      String source = Platform.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
       InputStream in = null;
+      log.debug("source {}", source);
 
-      if (!classPath.startsWith("jar")) {
-        System.out.println(String.format("manifest is \"not\" in jar - using file %s/META-INF/MANIFEST.MF", f.getAbsolutePath()));
-        // File file = new
-        // File(classLoader.getResource("file/test.xml").getFile());
-        in = clazz.getResource("/META-INF/MANIFEST.MF").openStream();
-
+      if (source.endsWith("jar")) {
+        // runtime
+        // DO NOT DO IT THIS WAY ->
+        // Platform.class.getResource("/META-INF/MANIFEST.MF").openStream();
+        // IT DOES NOT WORK WITH OpenJDK !!!
+        zf = new ZipFile(source);
+        in = zf.getInputStream(zf.getEntry("META-INF/MANIFEST.MF"));
+        // zf.close(); explodes on closing :(
       } else {
-        String manifestPath = classPath.substring(0, classPath.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF";
-        URL url = new URL(manifestPath);
-        System.out.println("jar url " + url);
-        in = url.openStream();
+        // IDE - version ...
+        in = Platform.class.getResource("/MANIFEST.MF").openStream();
+      }
+      // String manifest = FileIO.toString(in);
+      // log.debug("loading manifest {}", manifest);
+
+      Properties p = new Properties();
+      p.load(in);
+
+      for (final String name : p.stringPropertyNames()) {
+        ret.put(name, p.getProperty(name));
       }
 
-      Manifest manifest = new Manifest(in);
-      ret.putAll(getAttributes(null, manifest.getMainAttributes()));
-      final Map<String, Attributes> attrs = manifest.getEntries();
-      Iterator<String> it = attrs.keySet().iterator();
-      while (it.hasNext()) {
-        String key = it.next();
-        Attributes attributes = attrs.get(key);
-        ret.putAll(getAttributes(key, attributes));
+      for (final String name : ret.keySet()) {
+        log.debug(name + "=" + p.getProperty(name));
       }
 
       in.close();
     } catch (Exception e) {
-      System.out.println(String.format("getManifest threw %s", e));
+      e.printStackTrace();
+      // log.warn("getManifest threw", e);
+    } finally {
+      if (zf != null) {
+        try {
+          zf.close();
+        } catch (Exception e) {
+        }
+      }
     }
     return ret;
   }
 
-  private static Map<String, String> getAttributes(String part, Attributes attributes) {
-    Map<String, String> data = new TreeMap<String, String>();
-    Iterator<Object> it = attributes.keySet().iterator();
-    while (it.hasNext()) {
-      java.util.jar.Attributes.Name key = (java.util.jar.Attributes.Name) it.next();
-      Object value = attributes.get(key);
-      String partKey = null;
-      if (part == null) {
-        partKey = key.toString();
-      } else {
-        partKey = String.format("%s.%s", part, key);
-      }
-
-      System.out.println(partKey + ":  " + value);
-      if (value != null) {
-        data.put(partKey, value.toString());
-      }
-    }
-    return data;
-  }
-
   @Override
   public String toString() {
-    return String.format("%s.%d.%s", arch, bitness, os);
-  }
-
-  public static void main(String[] args) {
-    try {
-
-      Platform platform = Platform.getLocalInstance();
-      System.out.println("platform : " + platform.toString());
-      System.out.println("build " + platform.getBuild());
-      System.out.println("branch " + platform.getBranch());
-      System.out.println("commit " + platform.getCommit());
-      System.out.println("toString " + platform.toString());
-
-    } catch (Exception e) {
-      System.out.println(e);
-    }
+    return String.format("%s.%d.%s", arch, jvmBitness, os);
   }
 
   public String getId() {
+    // null ids are not allowed
+    if (id == null) {
+      id = NameGenerator.getName();
+    }
     return id;
   }
 
@@ -406,11 +377,6 @@ public class Platform implements Serializable {
     return hostname;
   }
 
-  /**
-   * the one place where the "id" can be set
-   * 
-   * @param argument
-   */
   public void setId(String newId) {
     id = newId;
   }
@@ -419,4 +385,33 @@ public class Platform implements Serializable {
     return startTime;
   }
 
+  public static boolean isVirtual() {
+    Platform p = getLocalInstance();
+    return p.isVirtual;
+  }
+
+  public static void setVirtual(boolean b) {
+    Platform p = getLocalInstance();
+    p.isVirtual = b;
+  }
+
+  public static void main(String[] args) {
+    try {
+      LoggingFactory.init(Level.DEBUG);
+      Platform platform = Platform.getLocalInstance();
+      log.debug("platform : {}", platform.toString());
+      log.debug("build {}", platform.getBuild());
+      log.debug("branch {}", platform.getBranch());
+      log.debug("commit {}", platform.getCommit());
+      log.debug("toString {}", platform.toString());
+
+    } catch (Exception e) {
+      log.error("main threw", e);
+    }
+  }
+
+  public boolean getVmVersion() {
+    // TODO Auto-generated method stub
+    return false;
+  }
 }

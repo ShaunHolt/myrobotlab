@@ -23,13 +23,8 @@ import io.github.firemaples.detect.Detect;
 import io.github.firemaples.language.Language;
 import io.github.firemaples.translate.Translate;
 
-
-
 public class AzureTranslator extends Service implements TextListener, TextPublisher {
 
-	
-
-	
   private static final long serialVersionUID = 1L;
 
   String toLanguage = "it";
@@ -49,8 +44,8 @@ public class AzureTranslator extends Service implements TextListener, TextPublis
     }
   }
 
-  public AzureTranslator(String n) {
-    super(n);
+  public AzureTranslator(String n, String id) {
+    super(n, id);
   }
 
   public String translate(String toTranslate) throws Exception {
@@ -69,10 +64,10 @@ public class AzureTranslator extends Service implements TextListener, TextPublis
   }
 
   public void setCredentials(String clientSecret) {
-	
-    //Translate.setKey(clientID);
+
+    // Translate.setKey(clientID);
     Translate.setSubscriptionKey(clientSecret);
-    //Detect.setKey(clientID);
+    // Detect.setKey(clientID);
     Detect.setSubscriptionKey(clientSecret);
   }
 
@@ -99,6 +94,7 @@ public class AzureTranslator extends Service implements TextListener, TextPublis
     meta.addCategory("translation", "cloud", "ai");
     meta.addDependency("io.github.firemaples", "microsoft-translator-java-api", "0.8.3");
     meta.setCloudService(true);
+    meta.setRequiresKeys(true);
     return meta;
   }
 
@@ -111,16 +107,30 @@ public class AzureTranslator extends Service implements TextListener, TextPublis
   public void addTextListener(TextListener service) {
     addListener("publishText", service.getName(), "onText");
   }
+  
+  @Override
+  public void attachTextListener(TextListener service) {
+    addListener("publishText", service.getName());
+  }
 
   @Override
   public void onText(String text) {
-      String cleanText;
-      try {
-        cleanText = translate(text);
-        invoke("publishText", cleanText);
-      } catch (Exception e) {
-        log.error("Unable to translate text! {} {}", text, e);
-      }
+    String cleanText;
+    try {
+      cleanText = translate(text);
+      invoke("publishText", cleanText);
+    } catch (Exception e) {
+      log.error("Unable to translate text! {} {}", text, e);
+    }
+  }
+  
+  @Override
+  public void attachTextPublisher(TextPublisher service) {
+    if (service == null) {
+      log.warn("{}.attachTextPublisher(null)");
+      return;
+    }
+    subscribe(service.getName(), "publishText");
   }
 
 }

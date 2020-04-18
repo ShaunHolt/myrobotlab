@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -45,9 +45,9 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
-import org.myrobotlab.service.Runtime;
+import org.myrobotlab.joystick.Component;
 import org.myrobotlab.service.Joystick;
-import org.myrobotlab.service.Joystick.Component;
+import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.SwingGui;
 import org.myrobotlab.service.data.JoystickData;
 import org.myrobotlab.swing.widget.JoystickCompassPanel;
@@ -88,7 +88,7 @@ public class JoystickGui extends ServiceGui implements ActionListener, ItemListe
   public JoystickGui(final String boundServiceName, final SwingGui myService) {
     super(boundServiceName, myService);
     self = this;
-    myJoy = (Joystick)Runtime.getService(boundServiceName);
+    myJoy = (Joystick) Runtime.getService(boundServiceName);
     addTop(controllers, refresh);
     add(buttonPanel);
     add(axisPanel);
@@ -142,9 +142,9 @@ public class JoystickGui extends ServiceGui implements ActionListener, ItemListe
           String name = it.next();
           controllers.addItem(name);
         }
-        
+
         String controller = myJoy.getController();
-        if (controller != null){
+        if (controller != null) {
           controllers.setSelectedItem(controller);
         }
         // controllers.addActionListener(self);
@@ -206,7 +206,7 @@ public class JoystickGui extends ServiceGui implements ActionListener, ItemListe
 
   public void onJoystickInput(final JoystickData input) {
     String id = input.id;
-    log.info(String.format("onButton %s", input));
+    log.info("onButton {}", input);
     if (input.value == null) {
       outputValues.get(id).setText("null");
       return;
@@ -246,9 +246,9 @@ public class JoystickGui extends ServiceGui implements ActionListener, ItemListe
           if (selected == null || "".equals(selected)) {
             send("stopPolling");
           } else {
-            log.info(String.format("changed to %s ", selected));
+            log.info("changed to {}", selected);
             send("setController", selected); // setController sets controller
-                                             // AND starts polling
+            // AND starts polling
           }
         }
       }

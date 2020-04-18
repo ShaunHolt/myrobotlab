@@ -3,7 +3,6 @@ package org.myrobotlab.document.connector;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
 import org.myrobotlab.document.Document;
 import org.myrobotlab.document.transformer.ConnectorConfig;
 import org.myrobotlab.framework.Service;
@@ -20,15 +19,19 @@ import org.myrobotlab.service.interfaces.DocumentPublisher;
 public abstract class AbstractConnector extends Service implements DocumentPublisher, DocumentConnector {
 
   private static final long serialVersionUID = 1L;
-
   protected ConnectorState state = ConnectorState.STOPPED;
   private int batchSize = 1;
   private List<Document> batch = Collections.synchronizedList(new ArrayList<Document>());
-
   private String docIdPrefix = "";
+  private Integer feedCount = 0;
+  private long lastUpdate = System.currentTimeMillis();
+  private long start = System.currentTimeMillis();
 
-  public AbstractConnector(String name) {
-    super(name);
+  // private long maxFeedCount = 10000;
+  private long maxFeedCount = -1;
+
+  public AbstractConnector(String name, String id) {
+    super(name, id);
     // no overruns!
     this.getOutbox().setBlocking(true);
   }
@@ -36,18 +39,42 @@ public abstract class AbstractConnector extends Service implements DocumentPubli
   public abstract void setConfig(ConnectorConfig config);
 
   public void feed(Document doc) {
-    // System.out.println("Feeding document " + doc.getId());
+    // log.info("Feeding document " + doc.getId());
     // TODO: add batching and change this to publishDocuments (as a list)
     // Batching for this sort of stuff is a very good thing.
     if (batchSize <= 1) {
+      feedCount++;
       invoke("publishDocument", doc);
     } else {
       // handle the batch
       // TODO: make this synchronized and thread safe!
       batch.add(doc);
       if (batch.size() >= batchSize) {
-        flush();
+        feedCount += batch.size();
+        //
+        synchronized (batch) {
+          invoke("publishDocuments", batch);
+          batch = Collections.synchronizedList(new ArrayList<Document>());
+        }
+        // flush();
       }
+    }
+
+    // update and report timing metrics
+    long now = System.currentTimeMillis();
+    long lastReport = now - lastUpdate;
+    // every 10 seconds
+    if (lastReport > 10000) {
+      // log the throughput
+      double speed = feedCount / (double) (now - start) * 1000;
+      log.info("Feed {} docs.  Current rate {}", feedCount, speed);
+      lastUpdate = now;
+    }
+
+    // // test the max feed count
+    if (feedCount > maxFeedCount && maxFeedCount >= 0) {
+      // stop this connector.
+      setState(ConnectorState.INTERRUPTED);
     }
   }
 
@@ -59,10 +86,12 @@ public abstract class AbstractConnector extends Service implements DocumentPubli
   public void flush() {
     // flush any partial batch
     // TODO: make this thread safe!
-    invoke("publishDocuments", batch);
-    invoke("publishFlush");
+    // invoke("publishFlush");
     // reset/clear the batch.
-    batch = new ArrayList<Document>();
+    synchronized (batch) {
+      invoke("publishDocuments", batch);
+      batch = Collections.synchronizedList(new ArrayList<Document>());
+    }
     // TODO: I worry there's a race condition here.. but maybe not... more
     // testing will show.
     while (getOutbox().size() > 0 && !state.equals(ConnectorState.RUNNING)) {

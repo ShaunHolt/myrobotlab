@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -53,8 +53,8 @@ import javax.swing.plaf.basic.BasicArrowButton;
 import org.myrobotlab.image.Util;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.service.DiyServo;
-import org.myrobotlab.service.SwingGui;
 import org.myrobotlab.service.Runtime;
+import org.myrobotlab.service.SwingGui;
 import org.myrobotlab.service.interfaces.PinArrayControl;
 import org.myrobotlab.service.interfaces.PinDefinition;
 import org.slf4j.Logger;
@@ -79,8 +79,8 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
     @Override
     public void stateChanged(javax.swing.event.ChangeEvent e) {
       if (mousePressed) {
-        if (myService != null) {
-          myService.send(boundServiceName, "moveTo", Integer.valueOf(slider.getValue()));
+        if (swingGui != null) {
+          swingGui.send(boundServiceName, "moveTo", Integer.valueOf(slider.getValue()));
         } else {
           log.error("can not send message myService is null");
         }
@@ -152,7 +152,7 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
 
     @Override
     public void mouseReleased(MouseEvent e) {
-      if (myService != null) {
+      if (swingGui != null) {
         myServo.map(Double.parseDouble(minInput.getText()), Double.parseDouble(maxInput.getText()), Double.parseDouble(minOutput.getText()),
             Double.parseDouble(maxOutput.getText()));
       } else {
@@ -201,7 +201,7 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
 
     @Override
     public void mouseReleased(MouseEvent e) {
-      if (myService != null) {
+      if (swingGui != null) {
         myServo.map(Double.parseDouble(minInput.getText()), Double.parseDouble(maxInput.getText()), Double.parseDouble(minOutput.getText()),
             Double.parseDouble(maxOutput.getText()));
       } else {
@@ -245,8 +245,8 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
 
   final String attachAnalog = "attach";
   final String detachAnalog = "detach";
-  JComboBox<String> pinArrayControlList = new JComboBox<String>();
-  JComboBox<Integer> analogInputPinList = new JComboBox<Integer>();
+  JComboBox<String> pinArrayControlList = new JComboBox<>();
+  JComboBox<String> analogInputPinList = new JComboBox<>();
   JButton attachListenerButton = new JButton(attachAnalog);
 
   JTextField posMin = new JTextField("0");
@@ -456,7 +456,7 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
           String pinControlName = (String) pinArrayControlList.getSelectedItem();
           myServo.pinControlName = pinControlName;
           refreshAnalogPinList();
-          log.debug(String.format("pinArrayControList event %s", pinControlName));
+          log.debug("pinArrayControList event {}", pinControlName);
         }
 
         if (o == attachListenerButton) {
@@ -616,8 +616,8 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
         }
 
         // In the inverted case, these are reversed
-        slider.setMinimum((int) servo.getMin());
-        slider.setMaximum((int) servo.getMax());
+        slider.setMinimum(servo.getMin().intValue());
+        slider.setMaximum(servo.getMax().intValue());
 
         posMin.setText(servo.getMin() + "");
         posMax.setText(servo.getMax() + "");
@@ -625,53 +625,34 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
 
         disableDelayGrace.setText(servo.disableDelayGrace + "");
 
-        if (servo.getMinInput() < mapInputSliderMinValue) {
-          mapInputSliderMinValue = (int) servo.getMinInput();
+        if (servo.getMin() < mapInputSliderMinValue) {
+          mapInputSliderMinValue = servo.getMin().intValue();
           mapInputSlider.setMinimum(mapInputSliderMinValue);
         }
 
-        if (servo.getMaxInput() > mapInputSliderMaxValue) {
-          mapInputSliderMaxValue = (int) servo.getMaxInput();
+        if (servo.getMax() > mapInputSliderMaxValue) {
+          mapInputSliderMaxValue = servo.getMax().intValue();
           mapInputSlider.setMaximum(mapInputSliderMaxValue);
         }
 
-        double minOutputTmp = servo.getMinOutput();
-        double maxOutputTmp = servo.getMaxOutput();
-
-        if (servo.isInverted()) {
-          minOutputTmp = servo.getMaxOutput();
-          maxOutputTmp = servo.getMinOutput();
-        }
-
-        if (servo.getMinOutput() < mapOutputSliderMinValue) {
-          mapOutputSliderMinValue = (int) servo.getMinOutput();
-          mapOutputSlider.setMinimum(mapOutputSliderMinValue);
-        }
-
-        if (servo.getMaxOutput() > mapOutputSliderMaxValue) {
-          mapOutputSliderMaxValue = (int) servo.getMaxOutput();
-          mapOutputSlider.setMaximum(mapOutputSliderMaxValue);
-        }
+      
 
         mapOutputSlider.setInverted(servo.isInverted());
 
-        minInput.setText(servo.getMinInput() + "");
-        maxInput.setText(servo.getMaxInput() + "");
-        minOutput.setText(minOutputTmp + "");
-        maxOutput.setText(maxOutputTmp + "");
+        minInput.setText(servo.getMin() + "");
+        maxInput.setText(servo.getMax() + "");
+  
 
-        mapInputSlider.setLowValue((int) servo.getMinInput());
-        mapInputSlider.setHighValue((int) servo.getMaxInput());
-        mapOutputSlider.setLowValue((int) servo.getMinOutput());
-        mapOutputSlider.setHighValue((int) servo.getMaxOutput());
-
+        mapInputSlider.setLowValue(servo.getMin().intValue());
+        mapInputSlider.setHighValue(servo.getMax().intValue());
+      
         if (servo.isSweeping()) {
           sweepButton.setText("stop");
         } else {
           sweepButton.setText("sweep");
         }
 
-        eventsEnabled = servo.isEventsEnabled();
+        // eventsEnabled = servo.isEventsEnabled();
 
         restoreListeners();
       }
@@ -706,11 +687,11 @@ public class DiyServoGui extends ServiceGui implements ActionListener {
           // Removed the filtering on pins, because the Arduino logic for the
           // different is not complete
           // if (pinData.isAnalog()){
-          analogInputPinList.addItem(pinData.getAddress());
+          analogInputPinList.addItem(pinData.getPinName());
           // }
         }
       }
-      analogInputPinList.setSelectedItem(myServo.pin);
+      analogInputPinList.setSelectedItem(myServo.getPin());
     }
   }
 

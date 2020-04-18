@@ -54,7 +54,7 @@ public class TopCodes extends Service {
       }
       for (int i = 0; i < codes.size(); ++i) {
         TopCode code = codes.get(i);
-        log.info(String.format("number %d code %d x %f y %f diameter %f", i, code.getCode(), code.getCenterX(), code.getCenterY(), code.getDiameter()));
+        log.info("number {} code {} x {} y {} diameter {}", i, code.getCode(), code.getCenterX(), code.getCenterY(), code.getDiameter());
       }
 
     } catch (Exception e) {
@@ -68,8 +68,8 @@ public class TopCodes extends Service {
    * 
    */
 
-  public TopCodes(String n) {
-    super(n);
+  public TopCodes(String n, String id) {
+    super(n, id);
   }
 
   public List<TopCode> scan(BufferedImage img) {
@@ -101,7 +101,7 @@ public class TopCodes extends Service {
 
     ServiceType meta = new ServiceType(TopCodes.class.getCanonicalName());
     meta.addDescription("Topcodes finds visual references and identifiers");
-    meta.addCategory("vision", "video", "sensor");
+    meta.addCategory("vision", "video", "sensors");
     meta.addDependency("topcodes", "topcodes", "1.0.0");
     return meta;
   }

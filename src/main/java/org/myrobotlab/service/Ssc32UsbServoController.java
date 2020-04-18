@@ -64,8 +64,8 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     return (us - 544) / 10;
   };
 
-  public Ssc32UsbServoController(String n) {
-    super(n);
+  public Ssc32UsbServoController(String n, String id) {
+    super(n, id);
   }
 
   /**
@@ -130,12 +130,6 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     serial.open(port, rate, databits, stopbits, parity);
   }
 
-  @Override
-  public void servoAttachPin(ServoControl servo, int pin) {
-    // DUNNO HOW TO RE-ENABLE unless its just a write to current position
-    servoMoveTo(servo);
-  }
-
   public void write(String cmd, Object... params) {
     if (serial == null || !serial.isConnected()) {
       error("must be connected to serial port - connect(port)");
@@ -143,7 +137,7 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     }
     try {
       String c = String.format("%s\r", String.format(cmd, params));
-      log.info(String.format("cmd [%s]", c));
+      log.info("cmd [{}]", c);
       serial.write(c.getBytes());
     } catch (Exception e) {
       log.error("serial threw", e);
@@ -151,21 +145,9 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
   }
 
   @Override
-  public void servoSweepStart(ServoControl servo) {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void servoSweepStop(ServoControl servo) {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void servoMoveTo(ServoControl servo) {
+  public void onServoMoveTo(ServoControl servo) {
     // # <ch> P <pw> ​S​​<spd>​​T​<time> <cr>
-    log.info(String.format("servoMove %f", servo.getTargetOutput()));
+    log.info("servoMove {}", servo.getTargetOutput());
     StringBuilder sb = new StringBuilder();
     sb.append("#").append(servo.getPin());
     sb.append("P").append((int) toUs(servo.getTargetOutput()));
@@ -177,7 +159,7 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     // The total number of milliseconds from where it currently is to a new
     // position
 
-    double velocity = servo.getVelocity();
+    double velocity = servo.getSpeed();
     if (velocity > 0) {
       // sb.append("T").append(velocity * 10); // T is us per second
       sb.append("T").append(velocity * 100);
@@ -190,11 +172,11 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
   }
 
   @Override
-  public void servoWriteMicroseconds(ServoControl servo, int uS) {
+  public void onServoWriteMicroseconds(ServoControl servo, int uS) {
     StringBuilder sb = new StringBuilder();
     sb.append("#").append(servo.getPin());
     sb.append("P").append(uS);
-    double velocity = servo.getVelocity();
+    double velocity = servo.getSpeed();
     if (velocity > 0) {
       // sb.append("T").append(velocity * 10); // T is us per second
       sb.append("T").append(velocity * 100);
@@ -202,32 +184,23 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     write(sb.toString());
   }
 
+  
   @Override
-  public void servoDetachPin(ServoControl servo) {
-    int pin = servo.getPin();
-    write("STOP %d #%dP0 #%dL #%dH", pin, pin, pin, pin);
-  }
-
-  @Override
-  public void servoSetVelocity(ServoControl servo) {
+  public void onServoSetSpeed(ServoControl servo) {
     // TODO Auto-generated method stub
 
   }
 
-  @Override
-  public void servoSetAcceleration(ServoControl servo) {
-    // probably a noop - as it can be pulled from the
-    // servo controller when the servo is moved.
-  }
-  
-  
   /**
-   * attach with parameters which will set all necessary attributes on ServoControl
-   * before calling the single parameter typed attach
+   * attach with parameters which will set all necessary attributes on
+   * ServoControl before calling the single parameter typed attach
    * 
-   * @param servo the servo
-   * @param pin the pin number 
-   * @throws Exception e
+   * @param servo
+   *          the servo
+   * @param pin
+   *          the pin number
+   * @throws Exception
+   *           e
    */
   @Override
   public void attach(ServoControl servo, int pin) throws Exception {
@@ -262,7 +235,7 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
    * logic is for this service.
    */
   @Override
-  public void attachServoControl(ServoControl servo) throws Exception {
+  public void attachServoControl(ServoControl servo) {
     if (isAttached(servo)) {
       return;
     }
@@ -274,7 +247,7 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
    * Routing detach - routes ServiceInterface.detach(service) to appropriate
    * methods for this class
    */
-  public void detach(Attachable service){
+  public void detach(Attachable service) {
     if (ServoControl.class.isAssignableFrom(service.getClass())) {
       detachServoControl((ServoControl) service);
       return;
@@ -285,7 +258,8 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
   /**
    * This is a typed detach for the one interface it knows how to attach to
    * 
-   * @param servo - servo control service
+   * @param servo
+   *          - servo control service
    */
   public void detachServoControl(ServoControl servo) {
     if (isAttached(servo.getName())) {
@@ -338,15 +312,15 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
        */
 
       /// big.setVelocity(10);
-      big.moveTo(0);
-      big.moveTo(90);
-      big.moveTo(180);
-      big.moveTo(10);
+      big.moveTo(0.0);
+      big.moveTo(90.0);
+      big.moveTo(180.0);
+      big.moveTo(10.0);
       big.disable();
-      big.moveTo(180);
+      big.moveTo(180.0);
       big.enable();
-      big.moveTo(10);
-      big.moveTo(160);
+      big.moveTo(10.0);
+      big.moveTo(160.0);
 
       big.detach(ssc);
 
@@ -387,22 +361,29 @@ public class Ssc32UsbServoController extends Service implements PortConnector, S
     connect(port, rate, 8, 1, 0);
   }
 
-/* (non-Javadoc)
- * @see org.myrobotlab.service.interfaces.ServoController#enablePin(java.lang.Integer, java.lang.Integer)
- */
-@Override
-public void enablePin(Integer sensorPin, Integer i) {
-	// TODO Auto-generated method stub
-	
-}
+  /*
+   * (non-Javadoc)
+   * 
+   * @see org.myrobotlab.service.interfaces.ServoController#enablePin(java.lang.
+   * Integer, java.lang.Integer)
+   */
+  @Override
+  public void onServoEnable(ServoControl servo) {
+    // TODO Auto-generated method stub
 
-/* (non-Javadoc)
- * @see org.myrobotlab.service.interfaces.ServoController#disablePin(java.lang.Integer)
- */
-@Override
-public void disablePin(Integer i) {
-	// TODO Auto-generated method stub
-	
-}
+  }
+
+  
+  @Override
+  public void onServoDisable(ServoControl servo) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public void onServoStop(ServoControl servo) {
+    // TODO Auto-generated method stub
+    
+  }
 
 }

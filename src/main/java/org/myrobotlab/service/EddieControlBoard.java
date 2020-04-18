@@ -9,7 +9,8 @@ import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.math.Mapper;
+import org.myrobotlab.math.MapperLinear;
+import org.myrobotlab.math.interfaces.Mapper;
 import org.myrobotlab.service.data.JoystickData;
 import org.myrobotlab.service.interfaces.JoystickListener;
 import org.myrobotlab.service.interfaces.KeyListener;
@@ -48,17 +49,6 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
     }
   }
 
-  class Simulator extends Thread {
-    @Override
-    public void run() {
-      while (isRunning()) {
-        // how to auto correct & read the various parts
-        // you know how to do this - ORIGINAL InputStream API Argggg !
-
-      }
-    }
-  }
-
   private static final long serialVersionUID = 1L;
 
   // Peers
@@ -67,14 +57,14 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
   transient Keyboard keyboard;
   transient WebGui webgui;
   transient Joystick joystick;
-  transient RemoteAdapter remote;
+  // transient RemoteAdapter remote;
 
   transient Python python;
   transient SpeechSynthesis mouth;
 
   HashMap<String, Float> lastSensorValues = new HashMap<String, Float>();
   int sampleCount = 0;
-  Mapper mapper = new Mapper(-1.0f, 1.0f, -127.0f, 127.0f);
+  Mapper mapper = new MapperLinear(-1.0, 1.0, -127.0, 127.0);
   float leftMotorPower = 0.0f;
 
   float rightMotorPower = 0.0f;
@@ -120,12 +110,12 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
     }
   }
 
-  public EddieControlBoard(String n) {
-    super(n);
+  public EddieControlBoard(String n, String id) {
+    super(n, id);
   }
 
   public void connect(String port) throws IOException {
-	  serial.open(port, 115200, 8, 1, 0);
+    serial.open(port, 115200, 8, 1, 0);
   }
 
   public String getAnalogValues() throws Exception {
@@ -186,13 +176,13 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
     return ret;
   }
 
-  public void go(float left, float right) throws Exception {
-    log.info(String.format("go %f %f", left, right));
-    int l = mapper.calcOutputInt(left);
+  public void go(double left, double right) throws Exception {
+    log.info("go {} {}", left, right);
+    int l = mapper.calcOutput(left).intValue();
     if (l > 127) {
       l = 128 - l;
     }
-    int r = mapper.calcOutputInt(right);
+    int r = mapper.calcOutput(right).intValue();
     if (r > 127) {
       r = 128 - r;
     }
@@ -343,7 +333,7 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
   }
 
   public String sendCmd(String cmd, int expectedResponseLength) throws Exception {
-    log.info(String.format("sendCommand %s", cmd));
+    log.info("sendCommand {}", cmd);
     String ret = null;
 
     serial.write(String.format("%s\r", cmd));
@@ -355,12 +345,15 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
   /**
    * sending a command when expecting a string response in the context of
    * blocking for response
-   * @param cmd to send
-   * @return  the string response
-   * @throws Exception e
+   * 
+   * @param cmd
+   *          to send
+   * @return the string response
+   * @throws Exception
+   *           e
    */
   public String sendCommand(String cmd) throws Exception {
-    log.info(String.format("sendCommand %s", cmd));
+    log.info("sendCommand {}", cmd);
     String ret = null;
 
     // serial.setBlocking(true);
@@ -396,11 +389,6 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
      */
   }
 
-  public void startRemoteAdapter() throws Exception {
-    remote = (RemoteAdapter) startPeer("remote");
-    remote.startListening();
-  }
-
   public boolean startSensors() {
     if (sensorPoller == null) {
       sensorPoller = new SensorPoller();
@@ -413,13 +401,23 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
   @Override
   public void startService() {
     super.startService();
-    serial = (Serial) startPeer("serial");
-    serial.addByteListener(this);
-    serial.setTimeout(500);
-    keyboard = (Keyboard) startPeer("keyboard");
-    keyboard.addKeyListener(this);
-    python = (Python) Runtime.start("python", "Python");
-    mouth = (SpeechSynthesis) Runtime.start("mouth", "NaturalReaderSpeech");
+    try {
+      if (serial == null) {
+        serial = (Serial) startPeer("serial");
+      }
+      serial.addByteListener(this);
+      serial.setTimeout(500);
+      if (keyboard == null) {
+        keyboard = (Keyboard) startPeer("keyboard");
+      }
+      keyboard.attach(getName());
+      python = (Python) Runtime.start("python", "Python");
+      if (mouth == null) {
+        mouth = (SpeechSynthesis) Runtime.start("mouth", "NaturalReaderSpeech");
+      }
+    } catch (Exception e) {
+      error(e);
+    }
   }
 
   public void startWebGUI() throws Exception {
@@ -475,7 +473,7 @@ public class EddieControlBoard extends Service implements KeyListener, SerialDat
     meta.addPeer("serial", "Serial", "serial");
     meta.addPeer("keyboard", "Keyboard", "serial");
     meta.addPeer("webgui", "WebGui", "webgui");
-    meta.addPeer("remote", "RemoteAdapter", "remote interface");
+    //meta.addPeer("remote", "RemoteAdapter", "remote interface");
     meta.addPeer("joystick", "Joystick", "joystick");
 
     return meta;

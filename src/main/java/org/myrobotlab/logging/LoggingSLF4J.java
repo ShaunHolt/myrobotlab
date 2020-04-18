@@ -25,7 +25,7 @@ public class LoggingSLF4J extends Logging {
   public void addAppender(String type) {
     addAppender(type, null);
   }
-  
+
   // http://stackoverflow.com/questions/7824620/logback-set-log-file-name-programmatically
 
   @Override
@@ -51,7 +51,7 @@ public class LoggingSLF4J extends Logging {
 
     // TODO - do layout ???
 
-    if (Appender.CONSOLE.equalsIgnoreCase(type)) {
+    if (AppenderType.CONSOLE.equalsIgnoreCase(type)) {
       ConsoleAppender<ILoggingEvent> console = new ConsoleAppender<ILoggingEvent>();
       console.setName(type);
       // console.setLayout(layout); ???
@@ -59,7 +59,7 @@ public class LoggingSLF4J extends Logging {
       console.setContext(lc);
       console.start();
       logger.addAppender(console);
-    } else if (Appender.FILE.equalsIgnoreCase(type)) {
+    } else if (AppenderType.FILE.equalsIgnoreCase(type)) {
       FileAppender<ILoggingEvent> fileAppender = new FileAppender<ILoggingEvent>();
       fileAppender.setName(type);
       fileAppender.setFile(LoggingFactory.getLogFileName());
@@ -68,7 +68,7 @@ public class LoggingSLF4J extends Logging {
       fileAppender.setAppend(false);
       fileAppender.start();
       logger.addAppender(fileAppender);
-    } else if (Appender.IS_AGENT.equalsIgnoreCase(type)) {
+    } else if (AppenderType.IS_AGENT.equalsIgnoreCase(type)) {
       // FROM_AGENT has only console - Agent has both console & file
       // appender
       /*
@@ -80,17 +80,18 @@ public class LoggingSLF4J extends Logging {
 
       // console
       ConsoleAppender<ILoggingEvent> console = new ConsoleAppender<ILoggingEvent>();
-      console.setName(String.format("%s.%s", Appender.IS_AGENT, Appender.CONSOLE));
+      console.setName(String.format("%s.%s", AppenderType.IS_AGENT, AppenderType.CONSOLE));
       // console.setLayout(layout); ???
       console.setEncoder(ple);
       console.setContext(lc);
       logger.addAppender(console);
-      
+
       // grr DailyRollingFileAppender f = new DailyRollingFileAppender();
 
       FileAppender<ILoggingEvent> fileAppender = new FileAppender<ILoggingEvent>();
-      fileAppender.setName(String.format("%s.%s", Appender.IS_AGENT, Appender.FILE));
-      // fileAppender.setFile(String.format("%s%smyrobotlabz.log", System.getProperty("user.dir"), File.separator));
+      fileAppender.setName(String.format("%s.%s", AppenderType.IS_AGENT, AppenderType.FILE));
+      // fileAppender.setFile(String.format("%s%smyrobotlabz.log",
+      // System.getProperty("user.dir"), File.separator));
       fileAppender.setFile(LoggingFactory.getLogFileName());
       fileAppender.setEncoder(ple);
       fileAppender.setAppend(false);
@@ -102,7 +103,7 @@ public class LoggingSLF4J extends Logging {
       // going to keep it shutdown - so as not to not do too much logging
       logger.addAppender(fileAppender);
 
-    } else if (Appender.FROM_AGENT.equalsIgnoreCase(type)) {
+    } else if (AppenderType.FROM_AGENT.equalsIgnoreCase(type)) {
       // only has console because the console is relayed to the Agent
       // shorter layout than Agent - since everything will be
       // prepended to Agent's log prefix
@@ -116,14 +117,14 @@ public class LoggingSLF4J extends Logging {
 
       // console
       ConsoleAppender<ILoggingEvent> console = new ConsoleAppender<ILoggingEvent>();
-      console.setName(String.format("%s.%s", Appender.FROM_AGENT, Appender.CONSOLE));
+      console.setName(String.format("%s.%s", AppenderType.FROM_AGENT, AppenderType.CONSOLE));
       // console.setLayout(layout); ???
       console.setEncoder(ple);
       console.setContext(lc);
       logger.addAppender(console);
 
     } else {
-      log.error(String.format("attempting to add unkown type of Appender %1$s", type));
+      log.error("attempting to add unkown type of Appender {}", type);
       return;
     }
 
@@ -131,14 +132,6 @@ public class LoggingSLF4J extends Logging {
 
   @Override
   public void configure() {
-    // LoggerFactory.getILoggerFactory();
-    // BasicConfigurator.configureDefaultContext();
-    // http://www.mkyong.com/logging/logback-duplicate-log-messages/
-    // BasicConfigurator.configureDefaultContext();
-    // LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
-    // BasicConfigurator.configure(lc);
-    // BasicConfigurator.configure(null);
-
     LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
     JoranConfigurator configurator = new JoranConfigurator();
     configurator.setContext(context);
@@ -147,13 +140,6 @@ public class LoggingSLF4J extends Logging {
 
   @Override
   public String getLevel() {
-    /*
-     * Map<String,String> levels=newTreeMap(); LoggerContext
-     * context=(LoggerContext)LoggerFactory.getILoggerFactory(); for ( Logger
-     * logger : context.getLoggerList()) { if (logger.getLevel() != null) {
-     * levels.put(logger.getName(),logger.getLevel().toString()); } }
-     */
-
     Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     Level level = logger.getLevel();
     if (level.equals(Level.DEBUG)) {
@@ -193,24 +179,24 @@ public class LoggingSLF4J extends Logging {
   }
 
   @Override
-  public void setLevel(String clazz, String level) {
+  public void setLevel(String clazz, String targetLevel) {
     if (clazz == null || clazz.length() == 0) {
       clazz = Logger.ROOT_LOGGER_NAME;
     }
 
-    Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+    Logger logger = (Logger) LoggerFactory.getLogger(clazz);
 
-    if ("DEBUG".equalsIgnoreCase(level)) { // && log4j {
+    if ("DEBUG".equalsIgnoreCase(targetLevel)) {
       logger.setLevel(Level.DEBUG);
-    } else if ("TRACE".equalsIgnoreCase(level)) { // && log4j {
+    } else if ("TRACE".equalsIgnoreCase(targetLevel)) {
       logger.setLevel(Level.TRACE);
-    } else if ("WARN".equalsIgnoreCase(level)) { // && log4j {
+    } else if ("WARN".equalsIgnoreCase(targetLevel)) {
       logger.setLevel(Level.WARN);
-    } else if ("ERROR".equalsIgnoreCase(level)) { // && log4j {
+    } else if ("ERROR".equalsIgnoreCase(targetLevel)) {
       logger.setLevel(Level.ERROR);
-      // } else if ("FATAL".equalsIgnoreCase(level)) { // && log4j {
+      // } else if ("FATAL".equalsIgnoreCase(level)) {
       // logger.setLevel(Level.FATAL);
-    } else { // && log4j {
+    } else {
       logger.setLevel(Level.INFO);
     }
   }

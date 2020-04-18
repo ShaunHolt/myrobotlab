@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -25,23 +25,24 @@
 
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.opencv_core.cvCreateImage;
-import static org.bytedeco.javacpp.opencv_core.cvGet2D;
-import static org.bytedeco.javacpp.opencv_core.cvGetSize;
-import static org.bytedeco.javacpp.opencv_core.cvPoint;
-import static org.bytedeco.javacpp.opencv_core.cvScalar;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_BGR2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCanny;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCvtColor;
-import static org.bytedeco.javacpp.opencv_imgproc.cvDilate;
-import static org.bytedeco.javacpp.opencv_imgproc.cvDrawLine;
+import static org.bytedeco.opencv.global.opencv_core.cvCreateImage;
+import static org.bytedeco.opencv.global.opencv_core.cvGet2D;
+import static org.bytedeco.opencv.global.opencv_core.cvPoint;
+import static org.bytedeco.opencv.global.opencv_core.cvScalar;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_BGR2GRAY;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCanny;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCvtColor;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvDilate;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvDrawLine;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import org.bytedeco.javacpp.opencv_core.CvPoint;
-import org.bytedeco.javacpp.opencv_core.CvScalar;
-import org.bytedeco.javacpp.opencv_core.IplImage;
+import org.bytedeco.opencv.opencv_core.CvPoint;
+import org.bytedeco.opencv.opencv_core.CvScalar;
+import org.bytedeco.opencv.opencv_core.IplImage;
 import org.myrobotlab.logging.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -148,8 +149,6 @@ public class OpenCVFilterMouse extends OpenCVFilter {
         // pattern
         switch (lastWall) {
           case SOUTH: {
-            // check SOUTHEAST
-            // Log.error("SOUTHEAST");
             if ((mousePos.x() + 1 > width || mousePos.y() + 1 > height) || cvGet2D(src, mousePos.y() + 1, mousePos.x() + 1).getVal(0) != BLACK) {
               // wall - check next
               lastWall = SOUTHEAST;
@@ -387,7 +386,7 @@ public class OpenCVFilterMouse extends OpenCVFilter {
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
+  public IplImage process(IplImage image) {
 
     if (image == null) {
       log.error("image is null");
@@ -412,10 +411,10 @@ public class OpenCVFilterMouse extends OpenCVFilter {
     }
 
     if (gray == null) {
-      gray = cvCreateImage(cvGetSize(image), 8, 1);
+      gray = cvCreateImage(image.cvSize(), 8, 1);
     }
     if (src == null) {
-      src = cvCreateImage(cvGetSize(image), 8, 1);
+      src = cvCreateImage(image.cvSize(), 8, 1);
     }
 
     if (image.nChannels() == 3) {
@@ -437,7 +436,12 @@ public class OpenCVFilterMouse extends OpenCVFilter {
 
     invoke("publish", (Object) path);
 
-    log.error("{}", path.size());
+    log.info("{}", path.size());
+    return image;
+  }
+
+  @Override
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
     return image;
   }
 

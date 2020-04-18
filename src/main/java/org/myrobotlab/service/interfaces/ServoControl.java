@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -25,157 +25,97 @@
 
 package org.myrobotlab.service.interfaces;
 
+import java.util.Set;
+
+import org.myrobotlab.framework.Config;
 import org.myrobotlab.framework.interfaces.Attachable;
-import org.myrobotlab.framework.interfaces.MessageSubscriber;
-import org.myrobotlab.framework.interfaces.NameProvider;
+import org.myrobotlab.framework.interfaces.StateSaver;
+import org.myrobotlab.math.interfaces.Mapper;
+import org.myrobotlab.sensor.EncoderListener;
+import org.myrobotlab.service.interfaces.ServoData.ServoStatus;
 
-public interface ServoControl extends AbsolutePositionControl, Attachable, MessageSubscriber {
-
-  // FIXME - do we want to support this & what do we expect from
-  // 1. should it be energsetAbsoluteSpeedized when initially attached?
-  // 2. should the position be set initially on attach ?
-  // 3. should rest be set by pos if its not set already .. ie .. is the pos
-  // passed in on attach the "rest" position of the servo ?
-  // 4. should we 'please' rename servo.attach(pin) to servo.enablePwm(pin)
-  // servo.disablePwm(pin)
-  // !!!!
+public interface ServoControl extends AbsolutePositionControl, EncoderListener, Attachable, StateSaver, org.myrobotlab.framework.interfaces.StatePublisher {
 
   /**
-   * The point of the 'attach' is a concept to the user of the Servo. A simple
-   * concept across all services where the "minimal" amount of
-   * complexity/parameters are needed to 'attach' position shall be default to
-   * rest/90 if not specified
-   *
+   * attaches a servo data listener for servo data - like position information
    * 
-   * speed/velocity shall be defaulted to 'max' ie - no speed control
-   * 
-   * 
-   * @param controller
-   *          c
-   * @param pin
-   *          p
-   * @throws Exception
-   *           e
+   * @param listener
    */
+  void attach(ServoController listener);
 
   /**
-   * The one and only one attach which does the work we expect attaching a
-   * ServoControl to a ServoController
+   * remove the listener
    * 
-   * @param controller
-   *          c
-   * @throws Exception
-   *           e
+   * @param listener
    */
-  void attachServoController(ServoController controller) throws Exception;
+  void detach(ServoController listener);
 
   /**
-   * the one and only one which detaches a 'specific' ServoControl from
-   * ServoController
-   * 
-   * @param controller
-   *          e
-   * @throws Exception
-   *           e
+   * disable the PWM pulses/power to the servo/motor
    */
-  void detachServoController(ServoController controller) throws Exception;
+  void disable();
 
   /**
-   * determines if a 'specific' controller is currently attached
-   * 
-   * @param controller
-   *          c
-   * @return true/false
-   * 
+   * enable the PWM pulses/power to the servo
    */
-  public boolean isAttachedServoController(ServoController controller);
+  @Config
+  void enable();
 
   /**
-   * attach with different parameters - it should set fields then call the "one
-   * and only" single parameter attachServoController(controller)
+   * getAutoDisable return value set by setAutoDisable
    * 
-   * @param controller
-   *          the controller
-   * @param pin
-   *          the pin
-   * @throws Exception
-   *           e
+   * @return Boolean
    */
-
-  void attach(ServoController controller, int pin) throws Exception;
-
-  void attach(ServoController controller, int pin, double pos) throws Exception;
-
-  void attach(ServoController controller, int pin, double pos, double speed) throws Exception;
+  boolean getAutoDisable();
 
   /**
-   * attach "Pin" - simple command to energize the pin. Equivalent to Arduino
-   * library's servo.attach(pin) with pin number coming from the servo
-   */
-  public void attach();
-
-  /**
-   * @param degreesPerSecond
-   *          degrees per second rotational velocity cm per second linear
-   *          velocity ?
+   * name of the current controllers - empty if not set
    * 
+   * @return
    */
-  public void setVelocity(double degreesPerSecond);
+  Set<String> getControllers();
 
-  /*
-   * Re-attaches (re-energizes) the servo on its current pin NOT RELATED TO
-   * CONTROLLER ATTACH/DETACH !
+  /**
+   * returns the encoder attached to this ServoControl
    * 
-   * Deprecated - use enable(pin)
+   * @return - the Encoder
    */
-  @Deprecated
-  public void attach(int pin);
+  EncoderControl getEncoder();
 
   /**
-   * detaching a pin (NOT RELATED TO DETACHING A SERVICE !)
-   */
-  @Deprecated // should be explicit from which service is being detached - by
-              // name or reference - this is "too" general
-  public void detach();
-
-  /**
-   * limits input of servo - to prevent damage or problems if servos should not
-   * move their full range
+   * The last time the servo was asked to move (system current time in ms?)
    * 
-   * @param min
-   *          min value
-   * @param max
-   *          max value
+   * @return
+   */
+  long getLastActivityTime();
+
+  /**
+   * get this servos mapper
    * 
+   * @return
    */
-  public void setMinMax(double min, double max);
+  Mapper getMapper();
 
   /**
-   * @return min x
-   */
-  public double getMin();
-
-  public double getMinInput();
-
-  /**
+   * gets the Max X of the mapper (input)
+   * 
    * @return max x
    */
-  public double getMax();
-
-  public double getMaxInput();
+  Double getMax();
 
   /**
-   * @param speed
-   *          fractional speed settings 0.0 to 1.0
+   * returns max speed if set
    * 
+   * @return - speed
    */
-  public void setSpeed(double speed);
+  Double getMaxSpeed();
 
   /**
-   * stops the servo if currently in motion servo must be moving at incremental
-   * speed for a stop to work (setSpeed &lt; 1.0)
+   * gets the min X of the mapper (input)
+   * 
+   * @return min x
    */
-  public void stop();
+  Double getMin();
 
   /**
    * configuration method - a method the controller will call when the servo is
@@ -189,109 +129,112 @@ public interface ServoControl extends AbsolutePositionControl, Attachable, Messa
    * 
    * @return the pin as an integer
    */
-  public Integer getPin();
+  String getPin();
 
   /**
-   * command to move to the rest position
-   */
-  public void rest();
-
-  /**
-   * Unmapped current position of last input. ie. equivalent to the last
-   * position from moveTo(pos)
+   * Unmapped current position of the servo. This can be incrementally updated
+   * by an encoder.
    * 
-   * A possible better solution might be to use ServoEvent(s) to get the
-   * position through time which a controller with speed control can provide, so
-   * as the servo is told incrementally where to go - it sends that command back
-   * as an event which sets the "current" position.
+   * A possible better solution might be to use ServoData to get the position
+   * through time which a controller with speed control can provide, so as the
+   * servo is told incrementally where to go - it sends that command back as an
+   * event which sets the "current" position.
    * 
-   * @return the current position as a double
-   */
-  public double getPos();
-
-  /**
-   * the calculated mapper output for the servo - this is <b> ALWAYS ALWAYS in
-   * DEGREES !</b> because this method is used by the controller - and the
-   * controller needs a stable method &amp; a stable unit FIXME - not sure if
-   * this is a good thing to expose
+   * This is a read only current position reported from the ServoControl. If a
+   * mapper calculation is supplied to generate output - and the ServoController
+   * uses it, and the ServoController sends back current position it "must" be
+   * in the form of the original input range
+   *
+   * set by feedback encoders if available - this is typically updated during
+   * movement - a read-only value
    * 
-   * @return the target output position
+   * @return the current position as a Double
    */
-  public double getTargetOutput();
-
-  public double getMaxVelocity();
-
-  double getVelocity();
-
-  /**
-   * set the pin of the servo this does not 'attach' energize the pin only set
-   * the pin value
-   * 
-   * @param pin
-   *          the pin number for the servo
-   */
-  void setPin(int pin);
-
-  /**
-   * @return the current acceleration value
-   */
-  public double getAcceleration();
-
-  /*
-   * synchronizing servos together e.g. leftEye.sync(rightEye)
-   */
-  public void sync(ServoControl sc);
-
-  /**
-   * @param rest
-   *          A default position for the servo. Defaulted to 90 unless
-   *          explicitly set. Position the servo will move to when method
-   *          servo.rest() is called
-   */
-  public void setRest(double rest);
+  Double getPos();
 
   /**
    * @return the current rest position value
    */
-  public double getRest();
-
-  boolean isInverted();
+  Double getRest();
 
   /**
-   * invert the map so a servo will go in reverse direction 0 == 180, 90 == 90, 180 == 0
-   * @param invert - true is to invert
-   */
-  public void setInverted(boolean invert);
-
-  // WTF ?
-  void addIKServoEventListener(NameProvider service);
-
-  /**
-   * setAutoDisable tell the servo to disable when position reached
-   * this make sense only if velocity > 0
-   * if velocity == -1 : a timer is launched to delay disable
-   * @param autoDisable
-   *          - boolean
-   */
-  void setAutoDisable(boolean autoDisable);
-
-  /**
-   * getAutoDisable return value set by setAutoDisable
+   * Return current speed if set - if speed/speed control is not being use it is
+   * null.
    * 
-   * @return boolean
+   * @return
    */
-  boolean getAutoDisable();
+  Double getSpeed();
 
   /**
-   * waitTargetPos is used by a global moveToBlocking command - pos usually is 0 - 180
-   * a global moveToBlocking is a method that use multiple servo at same time
-   * and wait every servo for last position arrived
+   * This value is for the ServoController to consume.
    * 
-   * @param pos
-   *          - position to move to
+   * The calculated mapper output for the servo - this is <b> ALWAYS ALWAYS in
+   * DEGREES !</b> because this method is used by the servo controller - and the
+   * controller needs a stable method &amp; a stable unit
+   * 
+   * The is the output of the mapper, the servo controller may have its own
+   * global mapper, this one is unique for a specific Servo
+   * 
+   * This is position the mapper returns after the calculation of mapper
+   * 
+   * @return the target output position
    */
-  void waitTargetPos();
-  
+  Double getTargetOutput();
+
+  Double getTargetPos();
+
+  @Deprecated
+  Double getVelocity();
+
+  /**
+   * When moveBlocking is in motion, not only should it block the calling thread
+   * until the end of the move, it should also prevent (cancel) other threads
+   * (even ones doing moveTo commands) until its done... conversely
+   * mutli-threaded moveTo commands are a free-for-all .. if you call a servo
+   * thats in process of a moveBlocking with a moveTo - your moveTo is canceled
+   * (not blocked) until the moveToBlocking is done. When a moveToBlocking is
+   * called from a different thread it should be blocked until the original is
+   * finished.
+   * 
+   * @return
+   */
+  boolean isBlocking();
+
+  /**
+   * is the servo currently sending pwm position control
+   * 
+   * @return
+   */
+  Boolean isEnabled();
+
+  /**
+   * Returns true if mapper is inverted
+   * 
+   * @return
+   */
+  Boolean isInverted();
+
+  /**
+   * Returns if the sevo is currently moving
+   * 
+   * @return
+   */
+  boolean isMoving();
+
+  /**
+   * This sets the servo's mapper explicitly
+   * 
+   * @param minX
+   *          - min input
+   * @param maxX
+   *          - max input
+   * @param minY
+   *          - min output
+   * @param maxY
+   *          - max output
+   */
+  void map(Double minX, Double maxX, Double minY, Double maxY);
+
   /**
    * moveToBlocking is a basic move command of the servo - usually is 0 - 180
    * valid range but can be adjusted and / or re-mapped with min / max and map
@@ -304,24 +247,200 @@ public interface ServoControl extends AbsolutePositionControl, Attachable, Messa
    *          - position to move to
    * @return true (why?)
    */
-  boolean moveToBlocking(double pos);
+  Double moveToBlocking(Double pos);
 
   /**
-   * Sometime we need to override autoDisable :
-   * servoGui slider / tracking / gestures  that leave your arms in the air ...
-   * so if overrideautoDisable(true) servo will never autoDisable
-   * until overrideautoDisable(false)
-   * ( we need to keep original autoDisable status, that is the reason ) 
+   * moveToBlocking with a timeout blocking calling thread until either move has
+   * been completed, or timeout reached
    */
-  void setOverrideAutoDisable(boolean overrideAutoDisable);
+  Double moveToBlocking(Double pos, Long timeoutMs);
 
-  void onServoEvent(Integer eventType, double currentPosUs);
+  /**
+   * publishing servo's move
+   * 
+   * @param sc
+   * @return
+   */
+  ServoControl publishMoveTo(ServoControl sc);
 
-  double getCurrentPosOutput();
+  /**
+   * 
+   * @param eventType
+   * @param currentPosUs
+   * @return
+   */
+  ServoData publishServoData(ServoStatus eventType, Double currentPosUs);
 
-  void addServoEventListener(NameProvider service);
+  ServoControl publishServoSetSpeed(ServoControl sc);
+
+  ServoControl publishServoEnable(ServoControl sc);
+
+  ServoControl publishServoDisable(ServoControl sc);
+
+  /**
+   * control message publishing moveTo
+   * 
+   * @param sc
+   * @return
+   */
+  ServoControl publishServoMoveTo(ServoControl sc);
+
+  /**
+   * Publishing topic for a servo stop event - returns position
+   * 
+   * @param sc
+   * @return
+   */
+  ServoControl publishServoStop(ServoControl sc);
+
+  ServoControl publishServoStopped(ServoControl sc);
+
+  /**
+   * command to move to the rest position
+   */
+  void rest();
+
+  /**
+   * setAutoDisable tell the servo to disable when position reached this make
+   * sense only if speed &gt; 0 if speed == -1 : a timer is launched to delay
+   * disable
+   * 
+   * @param autoDisable
+   *          - Boolean
+   */
+  void setAutoDisable(Boolean autoDisable);
+
+  /**
+   * invert the map so a servo will go in reverse direction 0 == 180, 90 == 90,
+   * 180 == 0
+   * 
+   * @param invert
+   *          - true is to invert
+   */
+  void setInverted(Boolean invert);
+
+  void setMapper(Mapper m);
+
+  void setMaxSpeed(Double speed);
+
+  /**
+   * limits input of servo - to prevent damage or problems if servos should not
+   * move their full range
+   * 
+   * @param min
+   *          min value
+   * @param max
+   *          max value
+   * 
+   */
+  void setMinMax(Double min, Double max);
+
+  /**
+   * set the pin of the servo this does not 'attach' energize the pin only set
+   * the pin value
+   * 
+   * @param pin
+   *          the pin number for the servo
+   */
+  void setPin(Integer pin);
+
+  /**
+   * set the pin of the servo this does not 'attach' energize the pin only set
+   * the pin value
+   * 
+   * @param pin
+   *          the pin number for the servo
+   */
+  void setPin(String pin);
+
+  /**
+   * This method sets the position without "moving" the servo. Typically, this
+   * is useful for setting the initial position of the servo during startup
+   * 
+   * @param pos
+   */
+  void setPosition(Double pos);
+
+  /**
+   * @param rest
+   *          A default position for the servo. Defaulted to 90 unless
+   *          explicitly set. Position the servo will move to when method
+   *          servo.rest() is called
+   */
+  void setRest(Double rest);
+
+  /**
+   * set the speed of the servo
+   * 
+   * @param d
+   */
+  void setSpeed(Double d);
+
+  /**
+   * @param speed
+   *          degrees per second rotational speed cm per second linear
+   * 
+   */
+  @Deprecated
+  void setVelocity(Double speed);
+
+  /**
+   * stops the servo if currently in motion servo must be moving at incremental
+   * speed for a stop to work (setSpeed &lt; 1.0)
+   */
+  void stop();
+
+  /**
+   * synchronizing servos together e.g. leftEye.sync(rightEye)
+   */
+  void sync(ServoControl sc);
+
+  /**
+   * unsync a servo
+   * 
+   * @param sc
+   */
+  void unsync(ServoControl sc);
   
-  public void enable();
-  
-  public void disable();
+  /**
+   * uset speed - speed control is removed
+   */
+  void unsetSpeed();
+
+  /**
+   * waitTargetPos is used by a global moveToBlocking command - pos usually is 0
+   * - 180 a global moveToBlocking is a method that use multiple servo at same
+   * time and wait every servo for last position arrived
+   * 
+   */
+  void waitTargetPos();
+
+  /**
+   * Writes a value in microseconds (uS) to the servo, controlling the shaft
+   * accordingly. On a standard servo, this will set the angle of the shaft. On
+   * standard servos a parameter value of 1000 is fully counter-clockwise, 2000
+   * is fully clockwise, and 1500 is in the middle.
+   *
+   * Note that some manufactures do not follow this standard very closely so
+   * that servos often respond to values between 700 and 2300. Feel free to
+   * increase these endpoints until the servo no longer continues to increase
+   * its range. Note however that attempting to drive a servo past its endpoints
+   * (often indicated by a growling sound) is a high-current state, and should
+   * be avoided.
+   *
+   * Continuous-rotation servos will respond to the writeMicrosecond function in
+   * an analogous manner to the write function.
+   * 
+   * @param uS
+   */
+  void writeMicroseconds(int uS);
+
+  // for instance attachment
+  void attachServoController(String sc, Integer pin, Double pos, Double speed);
+
+  /**
+   * remove speed control
+   */
+  void fullSpeed();
+
 }

@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -43,7 +43,6 @@ import javax.imageio.stream.MemoryCacheImageOutputStream;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.service.Vision;
 import org.slf4j.Logger;
 
 /**
@@ -56,7 +55,7 @@ import org.slf4j.Logger;
  */
 public class SerializableImage implements Serializable {
 
-  public final static Logger log = LoggerFactory.getLogger(Vision.class.getCanonicalName());
+  public final static Logger log = LoggerFactory.getLogger(SerializableImage.class.getCanonicalName());
 
   private static final long serialVersionUID = 1L;
 
@@ -66,7 +65,7 @@ public class SerializableImage implements Serializable {
   transient private BufferedImage image;
 
   /**
-   * jpg encoded byte buffer - TODO offer type png tff etc? TODO - consider
+   * png encoded byte buffer - TODO offer type png tff etc? TODO - consider
    * hashmap cache similar to the OpenCVData ???
    */
   private ByteBuffer buffer;
@@ -79,10 +78,10 @@ public class SerializableImage implements Serializable {
 
   public static void main(String[] args) throws Exception {
     try {
-      LoggingFactory.getInstance().configure();
+      LoggingFactory.init();
       ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream("object.data"));
 
-      ImageIO.write(null, "jpg", new MemoryCacheImageOutputStream(out));
+      ImageIO.write(null, "png", new MemoryCacheImageOutputStream(out));
     } catch (Exception e) {
       Logging.logError(e);
     }
@@ -151,7 +150,7 @@ public class SerializableImage implements Serializable {
     if (image != null) {
       try {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ImageIO.write(image, "jpg", new MemoryCacheImageOutputStream(bos));
+        ImageIO.write(image, "png", new MemoryCacheImageOutputStream(bos));
         bytes = bos.toByteArray();
         return bytes;
       } catch (Exception e) {
@@ -224,7 +223,7 @@ public class SerializableImage implements Serializable {
   // FIXME ??? use OpenCV cvEncode ???
   // FIXME !! PNG default ???
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
-    ImageIO.write(image, "jpg", new MemoryCacheImageOutputStream(out));
+    ImageIO.write(image, "png", new MemoryCacheImageOutputStream(out));
     Logging.logTime("writeObject");
   }
 

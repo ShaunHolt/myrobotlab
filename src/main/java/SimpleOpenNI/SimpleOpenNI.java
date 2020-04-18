@@ -6,7 +6,7 @@
  * This file is part of SimpleOpenNI.
  *
  * SimpleOpenNI is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU General Public License v2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -14,9 +14,9 @@
  * SimpleOpenNI is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the Apache License 2.0
  * along with SimpleOpenNI.  If not, see <http://www.gnu.org/licenses/>.
  * ----------------------------------------------------------------------------
  */
@@ -59,13 +59,13 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
         if (archStr.indexOf("86") >= 0) { // 32bit
           libName += "32.dll";
           nativLibPath = getLibraryPathWin();// +
-          // "/SimpleOpenNI/library/";
+          // "libraries/native/";
           // recent change
           nativDepLibPath = nativLibPath;// + "win32/"; recent change
         } else if (archStr.indexOf("64") >= 0) {
           libName += "64.dll";
           // nativLibPath = getLibraryPathWin() +
-          // "/SimpleOpenNI/library/";
+          // "libraries/native/";
           nativLibPath = getLibraryPathWin();
           // nativDepLibPath = nativLibPath + "win64/"; GroG ...
           // recent change
@@ -75,13 +75,13 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
         System.load(nativDepLibPath + "OpenNI2.dll");
         System.load(nativDepLibPath + "NiTE2.dll");
       } else if (sysStr.indexOf("nix") >= 0 || sysStr.indexOf("linux") >= 0) { // unix
-        nativLibPath = "/SimpleOpenNI/library/linux";
+        nativLibPath = "libraries/native/linux";
 
         if (archStr.indexOf("86") >= 0) { // 32bit
           libName += "32";
         } else if (archStr.indexOf("64") >= 0) {
           libName = "lib" + libName + "64.so";
-          nativLibPath = getLibraryPathLinux() + "/SimpleOpenNI/library/";
+          nativLibPath = System.getProperty("user.dir") + "/libraries/native/";
           nativDepLibPath = nativLibPath + "linux64/";
         }
 
@@ -90,7 +90,7 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
 
         libName = "lib" + libName + ".jnilib";
         // nativLibPath = getLibraryPathLinux() +
-        // "/SimpleOpenNI/library/";
+        // "libraries/native/";
         nativLibPath = getLibraryPathMac();
         nativDepLibPath = nativLibPath + "osx/";
 
@@ -468,12 +468,12 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
   /*
    * Enable the depthMap data collection
    * 
-   * @param width
-   *          int
-   * @param height
-   *          int
-   * @param fps
-   *          int
+   * @param width int
+   * 
+   * @param height int
+   * 
+   * @param fps int
+   * 
    * @return returns true if depthMap generation was succesfull
    */
   /*
@@ -614,7 +614,9 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
 
   /**
    * Enable hands
-   * @param cbObject c
+   * 
+   * @param cbObject
+   *          c
    * @return true/false
    */
   public boolean enableHand(Object cbObject) {
@@ -783,7 +785,9 @@ public class SimpleOpenNI extends ContextWrapper implements SimpleOpenNIConstant
 
   /**
    * Enable user
-   * @param cbObject c
+   * 
+   * @param cbObject
+   *          c
    * @return true/false
    */
   public boolean enableUser(Object cbObject) {

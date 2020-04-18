@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -30,58 +30,64 @@ import org.myrobotlab.framework.interfaces.Attachable;
 public interface ServoController extends Attachable {
 
   /**
-   * The one and only attach which is type specific and does all the work
-   * which we expect
-   *  
-   * @param servo the servo
-   * @throws Exception e
+   * attach with pin or address parameter - this will just call servo.setPin(int) then servoController.attach(servo)
+   * @param servo
+   * @param pinOrAddress
+   * @throws Exception
    */
-	void attachServoControl(ServoControl servo) throws Exception;
-	
-	/**
-	 * attach with parameters which will set attributes on ServoControl
-	 * ??? rules on which attributes in which service can be changed ???
-	 * 
-	 * @param servo the servo
-	 * @param pin the pin number 
-	 * @throws Exception e
-	 */
-	void attach(ServoControl servo, int pin) throws Exception;
-	
-	// this is Arduino's servo.attach
-	// void servoAttach(ServoControl servo, int pin, Integer targetOutput, Integer velocity);
-	
-	/*
-	 * Arduino's servo.attach(pin) which is just energizing on a pin
-	 */
-	// FIXME should be servoEnable - consistent with ServoControl
-	void servoAttachPin(ServoControl servo, int pin);
+  @Deprecated /* use attachServo(ServoControl sc) */
+  void attach(ServoControl servo, int pinOrAddress) throws Exception;
+  
+  /**
+   * preferred method to attach a ServoControl to a ServoController 
+   * previous attach function is deprecated - ServoController "should not" be calling any functions on ServoControl except possibly 
+   * ServoContro.attach(ServoController sc)
+   * 
+   * @param sc
+   */
+  void attachServoControl(ServoControl sc);
+  
 
-	void servoSweepStart(ServoControl servo);
+  /**
+   * The main function of the servo controller is to move the servo
+   * The ServoControl is passed as a parameter such that the controller can get
+   * all the necessary information to process the move correctly
+   * @param servo
+   */
+  void onServoMoveTo(ServoControl servo);
+  
+  /**
+   * Stop the servo regardless of where it is in its move
+   * @param servo
+   */
+  void onServoStop(ServoControl servo);
 
-	void servoSweepStop(ServoControl servo);
+  /**
+   * A direct call using micro-seconds instead of degrees
+   * 
+   * @param servo
+   * @param uS
+   */
+  void onServoWriteMicroseconds(ServoControl servo, int uS);
 
-	void servoMoveTo(ServoControl servo);
+ 
+  /**
+   * set the speed of the servo
+   * @param servo
+   */
+  void onServoSetSpeed(ServoControl servo);
 
-	void servoWriteMicroseconds(ServoControl servo, int uS);
 
-	// FIXME should be servoDisable - consistent with ServoControl
-	void servoDetachPin(ServoControl servo);
+  /**
+   * enable the pwm to a servo
+   * @param servo - the servo to enable
+   */
+  void onServoEnable(ServoControl servo);
 
-	void servoSetVelocity(ServoControl servo);
-
-	void servoSetAcceleration(ServoControl servo);
-
-	/**
-	 * @param sensorPin
-	 * @param i
-	 */
-	void enablePin(Integer sensorPin, Integer i);
-
-	/**
-	 * @param i
-	 */
-	void disablePin(Integer i);
-	
+  /**
+   * disable the pwm to a servo
+   * @param servo - the servo to disable
+   */
+  void onServoDisable(ServoControl servo);
 
 }

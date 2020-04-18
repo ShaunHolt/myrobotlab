@@ -28,6 +28,8 @@
 package org.myrobotlab.i2c;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.HashMap;
 
 import org.myrobotlab.framework.Service;
@@ -193,7 +195,7 @@ public class AdafruitLEDBackpack implements I2CDevice {
 
   public AdafruitLEDBackpack(int bus, int address) throws IOException, UnsupportedBusNumberException {
 
-    log.info(String.format("AdafruitLEDBackpack on %d %d", bus, address));
+    log.info("AdafruitLEDBackpack on {} {}", bus, address);
 
     // create I2C communications bus instance
     i2cbus = I2CFactory.getInstance(bus);
@@ -242,7 +244,7 @@ public class AdafruitLEDBackpack implements I2CDevice {
   }
 
   public String display(String data) {
-    log.info(String.format("displayString %s", data));
+    log.info("displayString {}", data);
     lastValue = data;
     if (translationInitialized) {
       initTranslation();
@@ -388,6 +390,18 @@ public class AdafruitLEDBackpack implements I2CDevice {
   public int getAddress() {
     // TODO Auto-generated method stub
     return 0;
+  }
+
+  @Override
+  public void ioctl(long arg0, int arg1) throws IOException {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public void ioctl(long arg0, ByteBuffer arg1, IntBuffer arg2) throws IOException {
+    // TODO Auto-generated method stub
+
   }
 
 }

@@ -1,7 +1,7 @@
 package org.myrobotlab.service;
 
-import static org.bytedeco.javacpp.lept.pixDestroy;
-import static org.bytedeco.javacpp.lept.pixRead;
+import static org.bytedeco.leptonica.global.lept.pixDestroy;
+import static org.bytedeco.leptonica.global.lept.pixRead;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -11,8 +11,8 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.lept.PIX;
-import org.bytedeco.javacpp.tesseract.TessBaseAPI;
+import org.bytedeco.leptonica.PIX;
+import org.bytedeco.tesseract.TessBaseAPI;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.image.SerializableImage;
@@ -48,8 +48,7 @@ public class TesseractOcr extends Service {
       // String found = tesseract.ocr("phototest.jpg");
       // String found = tesseract.ocr("30.speed.JPG");
       String found = tesseract.ocr("traffic.sign.jpg");
-      
-      
+
       // String found = tesseract.ocr("test.jpg");
       // String found = tesseract.ocr("test.tif");
       log.info("found {}", found);
@@ -60,8 +59,8 @@ public class TesseractOcr extends Service {
     }
   }
 
-  public TesseractOcr(String n) {
-    super(n);
+  public TesseractOcr(String n, String id) {
+    super(n, id);
   }
 
   public String ocr(BufferedImage image) throws IOException {
@@ -71,7 +70,7 @@ public class TesseractOcr extends Service {
     // javacv is expecting.. so we are going to do it the "file" way :P
     File temp = File.createTempFile("tesseract", ".jpg");
     FileOutputStream fos = new FileOutputStream(temp);
-    ImageIO.write(image, "jpg", fos);    
+    ImageIO.write(image, "jpg", fos);
     temp.deleteOnExit();
     return ocr(temp.getAbsolutePath());
   }
@@ -83,8 +82,9 @@ public class TesseractOcr extends Service {
       api = new TessBaseAPI();
     }
     // Initialize tesseract-ocr with English, without specifying tessdata path
-    // FIXME - maybe don't just dump in the root - perhaps subdirectory - and what
-    // about integrating with other /resources ? 
+    // FIXME - maybe don't just dump in the root - perhaps subdirectory - and
+    // what
+    // about integrating with other /resources ?
     if (api.Init(System.getProperty("user.dir"), "eng") != 0) {
       log.error("Could not initialize tesseract.");
     }
@@ -117,15 +117,11 @@ public class TesseractOcr extends Service {
    * 
    */
   static public ServiceType getMetaData() {
-
     ServiceType meta = new ServiceType(TesseractOcr.class);
     meta.addDescription("Optical character recognition - the ability to read");
-    meta.addCategory("intelligence");
-  
-    meta.addDependency("org.bytedeco.javacpp-presets", "tesseract-platform", "3.04.01-1.3");
-
-    // meta.addDependency("net.sourceforge.tess4j", "tess4j", "3.4.0");
-    // meta.addDependency("com.sun.jna", "3.2.2");
+    meta.addCategory("ai","vision");
+    meta.addDependency("org.bytedeco", "tesseract", "4.1.0-1.5.2");
+    meta.addDependency("org.bytedeco", "tesseract-platform", "4.1.0-1.5.2");
     return meta;
   }
 

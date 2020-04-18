@@ -24,25 +24,31 @@
 
 package org.myrobotlab.service;
 
-import java.io.Serializable;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.myrobotlab.codec.CodecUtils;
 import org.myrobotlab.framework.MRLListener;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
-import org.myrobotlab.framework.interfaces.NameProvider;
+import org.myrobotlab.io.FileIO;
+import org.myrobotlab.joystick.Component;
+import org.myrobotlab.joystick.Controller;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
-import org.myrobotlab.math.Mapper;
+import org.myrobotlab.math.MapperLinear;
+import org.myrobotlab.math.interfaces.Mapper;
 import org.myrobotlab.service.data.JoystickData;
 import org.slf4j.Logger;
 
-//import net.java.games.input.Controller;
 import net.java.games.input.ControllerEnvironment;
 import net.java.games.input.Rumbler;
 
@@ -62,23 +68,21 @@ public class Joystick extends Service {
   public final static Logger log = LoggerFactory.getLogger(Joystick.class);
   private static final long serialVersionUID = 1L;
 
-  /**
-   * array of "real" hardware non-serializable controls
-   */
-  transient net.java.games.input.Controller[] hardwareControllers;
+  List<Controller> controllers;
+
   /**
    * current selected controller
    */
-  transient net.java.games.input.Controller hardwareController = null;
-  /**
-   * array of "real" non-serializable hardware hwComponents
-   */
+  Controller hardwareController = null;
 
   Map<String, Set<MRLListener>> idAndServiceSubscription = new HashMap<String, Set<MRLListener>>();
 
-  transient net.java.games.input.Component[] hardwareComponents; // holds the
+  List<Component> hardwareComponents; // holds the
+
   transient Rumbler[] hardwareRumblers;
+
   transient InputPollingThread pollingThread = null;
+
   boolean isPolling = false;
 
   TreeMap<String, Integer> controllerNames = new TreeMap<String, Integer>();
@@ -95,37 +99,6 @@ public class Joystick extends Service {
 
   String controller;
 
-  static public class Component implements Serializable, NameProvider {
-    private static final long serialVersionUID = 1L;
-    public String id;
-    public boolean isRelative = false;
-    public boolean isAnalog = false;
-    public String type;
-    public int index;
-    public float value = 0;
-    String serviceName;
-
-    public Component(String serviceName, int index, net.java.games.input.Component c) {
-
-      this.serviceName = serviceName;
-      this.index = index;
-      this.isRelative = c.isRelative();
-      this.isAnalog = c.isAnalog();
-      this.type = c.getIdentifier().getClass().getSimpleName();
-      this.id = c.getIdentifier().toString();
-    }
-
-    @Override
-    public String toString() {
-      return String.format("%d %s [%s] relative %b analog %b", index, type, id, isRelative, isAnalog);
-    }
-
-    @Override
-    public String getName() {
-      return serviceName;
-    }
-  }
-
   public class InputPollingThread extends Thread {
 
     public InputPollingThread(String name) {
@@ -139,39 +112,50 @@ public class Joystick extends Service {
 
   public void poll() {
 
-    net.java.games.input.Controller pollingController = null;
-    net.java.games.input.Component[] hwComponents = null;
-    
+    // v net.java.games.input.Controller pollingController = null;
+    // v net.java.games.input.Component[] hwComponents = null;
+
+    Controller pollingController = null;
+    Component[] hwComponents = null;
+
     while (isPolling) {
       try {
-        
-        if (pollingController != hardwareController){
+
+        if (pollingController != hardwareController) {
           // the controller was switched !
           /* Get all the axis and buttons */
           pollingController = hardwareController;
           hwComponents = pollingController.getComponents();
-          info("found %d hwComponents", hwComponents.length);          
+          info("found %d hwComponents", hwComponents.length);
           broadcastState();
         }
-        
+
         if (pollingController == null) {
           error("controller is null - can not poll");
           stopPolling();
-        }        
+        }
 
         // get the data
-        if (!pollingController.poll()){
+        if (!pollingController.poll()) {
           error("failed to poll controller");
           stopPolling();
         }
-        
 
         // iterate through each component and compare last values
         for (int i = 0; i < hwComponents.length; i++) {
 
-          net.java.games.input.Component hwComp = hwComponents[i];
-          float input = hwComp.getPollData();
+          // v net.java.games.input.Component hwComp = hwComponents[i];
+          Component hwComp = hwComponents[i];
+
           String id = hwComp.getIdentifier().toString();
+          /*
+           * if (id.equals("3")) { log.info("here"); }
+           */
+
+          float input = hwComp.getPollData();
+
+          // log.info("", input);
+
           Component component = components.get(id);
           if (component == null) {
             log.error("{} component is not valid", id);
@@ -182,7 +166,7 @@ public class Joystick extends Service {
           if (Math.abs(input - component.value) > 0.0001) {
 
             if (mappers.containsKey(id)) {
-              input = (float) mappers.get(id).calcOutput(input);
+              input = mappers.get(id).calcOutput((double)input).floatValue();
             }
 
             JoystickData data = new JoystickData(id, input);
@@ -211,10 +195,21 @@ public class Joystick extends Service {
     }
   }
 
-  public Joystick(String n) {
-    super(n);
+  public Joystick(String n, String id) {
+    super(n, id);
+    // we will force a system property here to specify the native location for
+    // the
+    // jinput libraries
+    // TODO: this is a hacky work around because for some reason, the jinput
+    // natives
+    // aren't found from the jinput-platform jar files!!
+    String jinputNativePath = new java.io.File(".").getAbsolutePath() + File.separatorChar + "jinput-natives";
+    System.getProperties().setProperty("net.java.games.input.librarypath", jinputNativePath);
+    String[] controllers = getControllerNames();
+    info("found %d controllers %s", controllers.length, Arrays.toString(controllers));
   }
 
+  // FIXME - simply set components e.g. getComponents
   public Map<String, Component> getComponents() {
     components = new HashMap<String, Component>();
     if (hardwareController == null) {
@@ -222,33 +217,64 @@ public class Joystick extends Service {
       return components;
     }
 
-    hardwareComponents = hardwareController.getComponents();
-    if (hardwareComponents.length == 0) {
-      error("getComponents no Components found");
-      return components;
-    }
+    components = hardwareController.getComponentMap();
 
-    info("Num. Components: " + hardwareComponents.length);
-    for (int i = 0; i < hardwareComponents.length; i++) {
-      net.java.games.input.Component c = hardwareComponents[i];
-      String id = c.getIdentifier().toString();
-      Component component = new Component(getName(), i, c);
-      log.info("found {}", component);
-      components.put(id, component);
-    }
+    /*
+     * hardwareComponents = hardwareController.getComponents(); if
+     * (hardwareComponents.length == 0) {
+     * error("getComponents no Components found"); return components; }
+     * 
+     * info("number of components: " + hardwareComponents.length); for (int i =
+     * 0; i < hardwareComponents.length; i++) { // v
+     * net.java.games.input.Component c = hardwareComponents[i]; Component c =
+     * hardwareComponents[i]; String id = c.getIdentifier().toString(); // v
+     * Component component = new Component(getName(), i, c); // v
+     * log.info("found {}", component); // v components.put(id, component); }
+     */
     return components;
   }
 
   public Map<String, Integer> getControllers() {
-    log.info(String.format("%s getting controllers", getName()));
-    hardwareControllers = ControllerEnvironment.getDefaultEnvironment().getControllers();
-    info(String.format("found %d controllers", hardwareControllers.length));
+
+    log.info("{} getting controllers", getName());
+    // v hardwareControllers =
+    // ControllerEnvironment.getDefaultEnvironment().getControllers();
+    controllers = getControllerList();
+
+    info(String.format("found %d controllers", controllers.size()));
     controllerNames.clear();
-    for (int i = 0; i < hardwareControllers.length; i++) {
-      log.info(String.format("Found input device: %d %s", i, hardwareControllers[i].getName()));
-      controllerNames.put(String.format("%d - %s", i, hardwareControllers[i].getName()), i);
+    for (int i = 0; i < controllers.size(); i++) {
+      log.info("Found input device: {} {}", i, controllers.get(i).getName());
+      controllerNames.put(String.format("%d - %s", i, controllers.get(i).getName()), i);
     }
     return controllerNames;
+  }
+
+  // FIXME - clear global
+  public List<Controller> getControllerList() {
+    List<Controller> controllers = new ArrayList<Controller>();
+    net.java.games.input.Controller[] jinputControllers = ControllerEnvironment.getDefaultEnvironment().getControllers();
+    for (net.java.games.input.Controller controller : jinputControllers) {
+      try {
+        log.info("adding hardware controller {}", controller.getName());
+        controllers.add(new Controller(getName(), controller));
+      } catch (Exception e) {
+        log.error("adding new controller threw", e);
+      }
+    }
+    // FIXME - add virtual
+    return controllers;
+  }
+
+  public String[] getControllerNames() {
+    Map<String, Integer> c = getControllers();
+    String[] ret = new String[c.size()];
+    int i = 0;
+    for (String name : c.keySet()) {
+      ret[i] = name;
+      ++i;
+    }
+    return ret;
   }
 
   public boolean isPolling() {
@@ -259,8 +285,8 @@ public class Joystick extends Service {
     return rumblerOn;
   }
 
-  public void map(String name, float x0, float x1, float y0, float y1) {
-    Mapper mapper = new Mapper(x0, x1, y0, y1);
+  public void map(String name, double x0, double x1, double y0, double y1) {
+    Mapper mapper = new MapperLinear(x0, x1, y0, y1);
     mappers.put(name, mapper);
   }
 
@@ -268,9 +294,10 @@ public class Joystick extends Service {
     service.subscribe(this.getName(), "publishJoystickInput");
   }
 
-  public void addListener(String serviceName, String id) {
+  public void attach(String serviceName, String id) {
     if (!components.containsKey(id)) {
       error("%s requests subscription to component %s - but %d does not exist", serviceName, id, id);
+      return;
     }
     Set<MRLListener> listeners = null;
     if (idAndServiceSubscription.containsKey(id)) {
@@ -286,15 +313,15 @@ public class Joystick extends Service {
   }
 
   public JoystickData publishJoystickInput(final JoystickData input) {
-    log.debug(String.format("publishJoystickInput %s", input));
+    log.debug("publishJoystickInput {}", input);
     return input;
   }
 
   public boolean setController(int index) {
-    log.info(String.format("attaching controller %d", index));
 
-    if (index > -1 && index < hardwareControllers.length) {
-      hardwareController = hardwareControllers[index];
+    if (index > -1 && index < controllers.size()) {
+      hardwareController = controllers.get(index);
+      info("attaching controller %d-%s", index, hardwareController.getName());
       controller = String.format("%d - %s", index, hardwareController.getName());
       getComponents();
       startPolling();
@@ -308,10 +335,21 @@ public class Joystick extends Service {
   }
 
   public boolean setController(String s) {
+    // getControllers();
+    // exact match
     if (controllerNames.containsKey(s)) {
       setController(controllerNames.get(s));
       return true;
     }
+
+    // close match
+    for (String controllerName : controllerNames.keySet()) {
+      if (controllerName.contains(s)) {
+        setController(controllerNames.get(controllerName));
+        return true;
+      }
+    }
+
     error("setController - can't find %s", s);
     return false;
   }
@@ -330,7 +368,7 @@ public class Joystick extends Service {
   } // end of setRumbler()
 
   synchronized public void startPolling() {
-    log.info(String.format("startPolling - starting new polling thread %s_polling", getName()));
+    log.info("startPolling - starting new polling thread {}_polling", getName());
     if (pollingThread != null && isPolling == true) {
       log.warn("already polling, stop polling first");
       return;
@@ -353,10 +391,10 @@ public class Joystick extends Service {
   public String getController() {
     return controller;
   }
-  
-  public void releaseService(){
+
+  public void releaseService() {
     super.releaseService();
-    if (pollingThread != null){
+    if (pollingThread != null) {
       pollingThread.interrupt();
       isPolling = false;
     }
@@ -374,8 +412,9 @@ public class Joystick extends Service {
 
     ServiceType meta = new ServiceType(Joystick.class.getCanonicalName());
     meta.addDescription("service allows interfacing with a keyboard, joystick or gamepad");
-    meta.addCategory("control");
+    meta.addCategory("control","telerobotics");
     meta.addDependency("net.java.jinput", "jinput", "2.0.7");
+    meta.addDependency("jinput-natives", "jinput-natives", "2.0.7", "zip");
     // meta.addDependency("net.java.jinput", "jinput-platform", "2.0.7");
     // meta.addArtifact("net.java.jinput", "natives-windows");
     // meta.addArtifact("net.java.jinput", "natives-linux");
@@ -398,6 +437,10 @@ public class Joystick extends Service {
    * want motor to subscribe to my filtered x axis // subscribe() } }
    */
   public Component getAxis(String name) {
+    if (components == null) {
+      error("%s components null - cannot get axis %s", getName(), name);
+      return null;
+    }
     if (components.containsKey(name)) {
       Component c = components.get(name);
       if (!c.isAnalog) {
@@ -405,24 +448,171 @@ public class Joystick extends Service {
       }
       return c;
     }
-    error("getAxis(%s) not found");
+    error("getAxis(%s) not found", name);
     return null;
+  }
+
+  public void pressButton(String buttonName) {
+    if (components == null) {
+      log.error("controller not set");
+      return;
+    }
+
+    if (components == null) {
+      log.error("components are null");
+      return;
+    }
+
+    if (!components.containsKey(buttonName)) {
+      log.error("component {} does not exist", buttonName);
+      return;
+    }
+
+    Component component = components.get(buttonName);
+    component.setVirtualValue(1.0F);
+  }
+
+  public void releaseButton(String buttonName) {
+    if (components == null) {
+      log.error("controller not set");
+      return;
+    }
+
+    if (components == null) {
+      log.error("components are null");
+      return;
+    }
+
+    if (!components.containsKey(buttonName)) {
+      log.error("component {} does not exist", buttonName);
+      return;
+    }
+
+    Component component = components.get(buttonName);
+    component.setVirtualValue(0.0F);
+  }
+
+  public void pressReleaseButton(String buttonName) {
+    pressButton(buttonName);
+    releaseButton(buttonName);
+  }
+
+  public Controller cloneController(int index) throws IOException {
+    if (controllers == null) {
+      log.error("controllers not set");
+      return null;
+    }
+
+    Controller controller = controllers.get(index);
+    String filename = String.format("%s-virtual-%s-%s.json", getName(), controller.getName(), ++index);
+
+    save(controller, filename);
+
+    // FIXME - non-symmetric save and load :(
+    String fname = String.format("%s%s%s", FileIO.getCfgDir(), File.separator, filename);
+
+    Controller v = loadVirtualController(fname);
+    return v;
+  }
+
+  public Controller loadVirtualController(String filename) throws IOException {
+    String json = FileIO.toString(filename);
+    Controller controller = CodecUtils.fromJson(json, Controller.class);
+
+    if (controller != null) {
+      // v.setName(String.format("virtual %s", controller.getName()));
+      controller.reIndex(getName());
+      // virtualControllers.add(controller);
+      controllers.add(controller);
+      controllerNames.put(controller.getName(), controllers.size() - 1);
+    } else {
+      error("could not load virtual controller from %s", filename);
+    }
+
+    return controller;
   }
 
   public static void main(String args[]) {
     LoggingFactory.init();
+    LoggingFactory.setLevel("INFO");
     try {
 
       Joystick joy = (Joystick) Runtime.start("joy", "Joystick");
+      Runtime.start("gui", "SwingGui");
+
+      joy.setController(2);
+
+      // TODO - clone all
+      // TODO - virtualize all
+      joy.cloneController(2);
+
+      joy.pressButton("1");
+      joy.pressButton("2");
+      joy.pressButton("3");
+      joy.pressButton("4");
+      joy.releaseButton("4");
+      joy.moveTo("rz", 0.3);
+      joy.moveTo("rz", 0.35);
+      joy.moveTo("rz", 0.4);
+      joy.moveTo("rz", 0.56);
+      joy.moveTo("rz", 0.343);
+      joy.moveTo("rz", 0.754);
+      joy.moveTo("x", 0.56);
+      joy.moveTo("x", 0.343);
+      joy.moveTo("x", 0.754);
+      joy.moveTo("y", 0.56);
+      joy.moveTo("y", 0.343);
+      joy.moveTo("y", 0.754);
+
+      joy.pressReleaseButton("3");
+      joy.pressButton("10");
+      // Mqtt mqtt01 = (Mqtt) Runtime.start("mqtt01", "Mqtt");
+      // WatchDogTimer watchdog = (WatchDogTimer) Runtime.start("watchdog",
+      // "WatchDogTimer");
+      // Python python = (Python) Runtime.start("python", "Python");
+
+      // Motor m1 = (Motor) Runtime.start("m1", "Motor");
+
+      // configuration
+      // adding and activating a checkpoint
+      // watchdog.addTimer("joystickCheck"); // <-- response action
+      // watchdog.addTimer("joystickCheck",
+
+      // watchdog.addAction("m1", "stop");
+
       // joy.mapId("x", "rx");
       // joy.map("y", -1, 1, 0, 180);
-      Runtime.start("cli", "Cli");
+     
       Runtime.start("gui", "SwingGui");
 
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("main threw", e);
     }
 
+  }
+
+  public void moveTo(String axisName, float value) {
+    moveTo(axisName, (double) value);
+  }
+
+  public void moveTo(String axisName, double value) {
+    if (components == null) {
+      log.error("controller not set");
+      return;
+    }
+
+    if (components == null) {
+      log.error("components are null");
+      return;
+    }
+
+    if (!components.containsKey(axisName)) {
+      log.error("component {} does not exist", axisName);
+      return;
+    }
+
+    Component component = components.get(axisName);
+    component.setVirtualValue(value);
   }
 
 }

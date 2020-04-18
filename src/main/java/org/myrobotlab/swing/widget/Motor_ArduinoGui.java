@@ -9,10 +9,10 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 
-import org.myrobotlab.service.Arduino;
 import org.myrobotlab.service.Motor;
 import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.SwingGui;
+import org.myrobotlab.service.interfaces.PinArrayControl;
 import org.myrobotlab.service.interfaces.PinDefinition;
 
 public class Motor_ArduinoGui extends MotorControllerPanel implements ActionListener {
@@ -39,11 +39,9 @@ public class Motor_ArduinoGui extends MotorControllerPanel implements ActionList
     this.motorName = motorName;
 
     // FIXME - BLOCKING I BORKED
-    Arduino o = (Arduino) Runtime.getService(controllerName);
+    PinArrayControl o = (PinArrayControl) Runtime.getService(controllerName);
 
-
-     pinList = o.getPinList();
-    
+    pinList = o.getPinList();
 
     for (int i = 0; i < pinList.size(); ++i) {
       PinDefinition pindef = pinList.get(i);
@@ -57,7 +55,7 @@ public class Motor_ArduinoGui extends MotorControllerPanel implements ActionList
     }
 
     for (int i = 0; i < pinList.size(); ++i) {
-    	PinDefinition pin = pinList.get(i);
+      PinDefinition pin = pinList.get(i);
       directionPin.addItem(String.format("%d", pin.getAddress()));
     }
 

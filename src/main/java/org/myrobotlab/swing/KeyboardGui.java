@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -77,8 +77,8 @@ public class KeyboardGui extends ServiceGui implements ActionListener {
     unsubscribe("publishKeyCode");
     unsubscribe("publishMouseMoved");
   }
-  
-  public void onKey(final String key){
+
+  public void onKey(final String key) {
     SwingUtilities.invokeLater(new Runnable() {
       @Override
       public void run() {
@@ -86,8 +86,8 @@ public class KeyboardGui extends ServiceGui implements ActionListener {
       }
     });
   }
-  
-  public void onKeyCode(final Integer code){
+
+  public void onKeyCode(final Integer code) {
     SwingUtilities.invokeLater(new Runnable() {
       @Override
       public void run() {
@@ -95,8 +95,8 @@ public class KeyboardGui extends ServiceGui implements ActionListener {
       }
     });
   }
-  
-  public void onMouseMoved(final MouseEvent me ){
+
+  public void onMouseMoved(final MouseEvent me) {
     SwingUtilities.invokeLater(new Runnable() {
       @Override
       public void run() {
@@ -111,11 +111,11 @@ public class KeyboardGui extends ServiceGui implements ActionListener {
     Object o = e.getSource();
     if (o == listen) {
       String text = listen.getText();
-      if ("start listening".equals(text)){
-        myService.send(boundServiceName, "startListening");
+      if ("start listening".equals(text)) {
+        swingGui.send(boundServiceName, "startListening");
         listen.setText("stop listening");
       } else {
-        myService.send(boundServiceName, "stopListening");
+        swingGui.send(boundServiceName, "stopListening");
         listen.setText("start listening");
       }
     }
@@ -123,9 +123,9 @@ public class KeyboardGui extends ServiceGui implements ActionListener {
 
   /*
    * Service State change - this method will be called when a "broadcastState"
-   * method is called which triggers a publishState.  This event handler is typically
-   * used when data or state information in the service has changed, and the UI should
-   * update to reflect this changed state.
+   * method is called which triggers a publishState. This event handler is
+   * typically used when data or state information in the service has changed,
+   * and the UI should update to reflect this changed state.
    */
   public void onState(Keyboard keyboard) {
     SwingUtilities.invokeLater(new Runnable() {

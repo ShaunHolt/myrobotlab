@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -42,11 +42,11 @@ public class WiiBot extends Service {
   public final static Logger log = LoggerFactory.getLogger(WiiBot.class.getCanonicalName());
 
   transient Arduino arduino = null;
-  transient Wii wii = new Wii("wii");
-  transient Servo servo = new Servo("servo");
-  transient Vision opencv = new Vision("opencv");
-  transient WiiDar wiidar = new WiiDar("wiidar");
-  transient SwingGui gui = new SwingGui("gui");
+  transient Wii wii = (Wii)Runtime.start("wii", "Wii");
+  transient Servo servo = (Servo)Runtime.start("servo", "Servo");
+  transient OpenCV opencv = (OpenCV)Runtime.start("opencv", "OpenCV");
+  transient WiiDar wiidar = (WiiDar)Runtime.start("wiidar", "WiiDar");
+  transient SwingGui gui = (SwingGui)Runtime.start("gui", "SwingGui");
 
   int speedRight = 0;
 
@@ -56,7 +56,7 @@ public class WiiBot extends Service {
     LoggingFactory.init(Level.WARN);
     try {
 
-      WiiBot wiibot = new WiiBot("wiibot");
+      WiiBot wiibot = (WiiBot)Runtime.start("wiibot", "WiiBot");
       wiibot.startService();
       wiibot.startRobot();
 
@@ -66,8 +66,8 @@ public class WiiBot extends Service {
 
   }
 
-  public WiiBot(String n) {
-    super(n);
+  public WiiBot(String n, String id) {
+    super(n, id);
   }
 
   public void keyPressed(Integer i) {
@@ -144,7 +144,7 @@ public class WiiBot extends Service {
   }
 
   public void startRobot() throws Exception {
-    arduino = new Arduino("arduino");
+    arduino = (Arduino)Runtime.start("arduino","Arduino");
 
     // adding wiicom as an option
     /*

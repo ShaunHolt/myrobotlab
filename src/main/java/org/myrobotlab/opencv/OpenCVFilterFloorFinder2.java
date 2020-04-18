@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -25,45 +25,44 @@
 
 package org.myrobotlab.opencv;
 
-import static org.bytedeco.javacpp.helper.opencv_core.CV_RGB;
-import static org.bytedeco.javacpp.helper.opencv_imgproc.cvFindContours;
-import static org.bytedeco.javacpp.opencv_core.cvClearMemStorage;
-import static org.bytedeco.javacpp.opencv_core.cvCreateImage;
-import static org.bytedeco.javacpp.opencv_core.cvCreateMemStorage;
-//import static org.bytedeco.javacpp.opencv_core.cvDrawRect;
-import static org.bytedeco.javacpp.opencv_core.cvGetSeqElem;
-import static org.bytedeco.javacpp.opencv_core.cvGetSize;
-import static org.bytedeco.javacpp.opencv_core.cvPoint;
-import static org.bytedeco.javacpp.opencv_core.cvScalar;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_BGR2GRAY;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_CHAIN_APPROX_SIMPLE;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
-import static org.bytedeco.javacpp.opencv_imgproc.CV_POLY_APPROX_DP;
-import static org.bytedeco.javacpp.opencv_imgproc.cvApproxPoly;
-import static org.bytedeco.javacpp.opencv_imgproc.cvBoundingRect;
-import static org.bytedeco.javacpp.opencv_imgproc.cvContourPerimeter;
-import static org.bytedeco.javacpp.opencv_imgproc.cvCvtColor;
-import static org.bytedeco.javacpp.opencv_imgproc.cvDrawRect;
-import static org.bytedeco.javacpp.opencv_imgproc.cvFloodFill;
-import static org.bytedeco.javacpp.opencv_imgproc.cvFont;
-import static org.bytedeco.javacpp.opencv_imgproc.cvPutText;
+import static org.bytedeco.opencv.helper.opencv_core.CV_RGB;
+import static org.bytedeco.opencv.helper.opencv_imgproc.cvFindContours;
+import static org.bytedeco.opencv.global.opencv_core.cvClearMemStorage;
+import static org.bytedeco.opencv.global.opencv_core.cvCreateImage;
+import static org.bytedeco.opencv.global.opencv_core.cvCreateMemStorage;
+//import static org.bytedeco.opencv.global.opencv_core.cvDrawRect;
+import static org.bytedeco.opencv.global.opencv_core.cvGetSeqElem;
+import static org.bytedeco.opencv.global.opencv_core.cvPoint;
+import static org.bytedeco.opencv.global.opencv_core.cvScalar;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_BGR2GRAY;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_CHAIN_APPROX_SIMPLE;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_FONT_HERSHEY_PLAIN;
+import static org.bytedeco.opencv.global.opencv_imgproc.CV_POLY_APPROX_DP;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvApproxPoly;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvBoundingRect;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvContourPerimeter;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvCvtColor;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvFloodFill;
+import static org.bytedeco.opencv.global.opencv_imgproc.cvFont;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.bytedeco.javacpp.Loader;
-import org.bytedeco.javacpp.opencv_core.CvContour;
-//import org.bytedeco.javacpp.opencv_core.CvFont;
-import org.bytedeco.javacpp.opencv_core.CvMemStorage;
-import org.bytedeco.javacpp.opencv_core.CvPoint;
-import org.bytedeco.javacpp.opencv_core.CvRect;
-import org.bytedeco.javacpp.opencv_core.CvScalar;
-import org.bytedeco.javacpp.opencv_core.CvSeq;
-import org.bytedeco.javacpp.opencv_core.IplImage;
-import org.bytedeco.javacpp.opencv_imgproc.CvFont;
+import org.bytedeco.opencv.opencv_core.CvContour;
+//import org.bytedeco.opencv.opencv_core.CvFont;
+import org.bytedeco.opencv.opencv_core.CvMemStorage;
+import org.bytedeco.opencv.opencv_core.CvPoint;
+import org.bytedeco.opencv.opencv_core.CvRect;
+import org.bytedeco.opencv.opencv_core.CvScalar;
+import org.bytedeco.opencv.opencv_core.CvSeq;
+import org.bytedeco.opencv.opencv_core.IplImage;
+import org.bytedeco.opencv.opencv_imgproc.CvFont;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.service.data.Point2Df;
-import org.myrobotlab.service.data.Rectangle;
+import org.myrobotlab.math.geometry.Point2df;
+import org.myrobotlab.math.geometry.Rectangle;
 import org.slf4j.Logger;
 //import static org.bytedeco.javacpp.opencv_core.cvFont;
 //import static org.bytedeco.javacpp.opencv_core.cvPutText;
@@ -72,7 +71,7 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
 
   private static final long serialVersionUID = 1L;
 
-  public final static Logger log = LoggerFactory.getLogger(OpenCVFilterFloorFinder2.class.getCanonicalName());
+  public final static Logger log = LoggerFactory.getLogger(OpenCVFilterFloorFinder2.class);
 
   transient CvFont font = cvFont(CV_FONT_HERSHEY_PLAIN);
 
@@ -95,15 +94,16 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
   transient IplImage dst = null;
   transient CvSeq contourPointer = new CvSeq();
   transient CvMemStorage storage = null;
-  
+
   transient CvPoint startPoint = cvPoint(180, 120);
   transient CvScalar fillColor = cvScalar(255.0, 0.0, 0.0, 1.0);
-  transient CvScalar lo_diff = CV_RGB(20.0, 20.0, 20.0);// cvScalar(20, 0.0, 0.5, 1.0);
+  transient CvScalar lo_diff = CV_RGB(20.0, 20.0, 20.0);// cvScalar(20, 0.0,
+  // 0.5, 1.0);
   transient CvScalar up_diff = CV_RGB(20.0, 20.0, 20.0);
-  
+
   // floor finder related
-  CvPoint origin =  null;
-  public List<Point2Df> edgePoints;
+  CvPoint origin = null;
+  public List<Point2df> edgePoints;
 
   public OpenCVFilterFloorFinder2() {
     super();
@@ -114,51 +114,19 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
   }
 
   @Override
-  public IplImage display(IplImage image, OpenCVData data) {
-    ArrayList<Rectangle> boxes = data.getBoundingBoxArray();
-    if (boxes != null) {
-      for (Rectangle box : boxes) {
-        // cvDrawRect(image, cvPoint(x0, y0), cvPoint(x1, y1),
-        // CvScalar.RED, 1, 1, 0);
-        if (useFloatValues) {
-          int x = (int) (box.x * width);
-          int y = (int) (box.y * height);
-          int w = x + (int) (box.width * width);
-          int h = y + (int) (box.height * height);
-          cvDrawRect(image, cvPoint(x, y), cvPoint(w, h), CvScalar.WHITE, 1, 1, 0);
-        } else {
-          int x = (int) box.x;
-          int y = (int) box.y;
-          int w = x + (int) box.width;
-          int h = y + (int) box.height;
-          cvDrawRect(image, cvPoint(x, y), cvPoint(w, h), CvScalar.WHITE, 1, 1, 0);
-        }
-      }
-      cvPutText(image, String.format("cnt %d", boxes.size()), cvPoint(10, 10), font, CvScalar.WHITE);
-    } else {
-      cvPutText(image, "null", cvPoint(10, 10), font, CvScalar.WHITE);
-    }
-
-    // cvPutText(image, "killroy was here", cvPoint(10,10), font,
-    // CvScalar.WHITE);
-
-    return image;
-  }
-
-  @Override
   public void imageChanged(IplImage image) {
     if (storage == null) {
       storage = cvCreateMemStorage(0);
     }
 
-    grey = cvCreateImage(cvGetSize(image), 8, 1);
+    grey = cvCreateImage(image.cvSize(), 8, 1);
     // display = cvCreateImage(cvGetSize(frame), 8, 3);
 
     startPoint = cvPoint(image.width() / 2, image.height() - 4);
   }
 
   @Override
-  public IplImage process(IplImage image, OpenCVData data) {
+  public IplImage process(IplImage image) {
 
     // FIXME 3 channel search ???
     if (image.nChannels() == 3) {
@@ -167,7 +135,7 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
     } else {
       grey = image.clone();
     }
-    
+
     // ============ floor finder begin ================
     fillColor = cvScalar(255.0, 255.0, 255.0, 1.0);
 
@@ -177,11 +145,11 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
     cvFloodFill(image, startPoint, fillColor, lo_diff, up_diff, null, 4, null);
 
     fillColor = cvScalar(0.0, 255.0, 0.0, 1.0);
-    // ============ floor finder end  ================
+    // ============ floor finder end ================
 
     cvFindContours(grey, storage, contourPointer, Loader.sizeof(CvContour.class), 0, CV_CHAIN_APPROX_SIMPLE);
     CvSeq contours = contourPointer;
-    ArrayList<Rectangle> list = new ArrayList<Rectangle>();
+    boxes = new ArrayList<Rectangle>();
 
     while (contours != null && !contours.isNull()) {
       if (contours.elem_size() > 0) { // TODO - limit here for
@@ -219,35 +187,31 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
         if (isMinArea && isMaxArea) {
 
           Rectangle box = new Rectangle();
-          if (useFloatValues) {
-            box.x = (float) rect.x() / width;
-            box.y = (float) rect.y() / height;
-            box.width = (float) rect.width() / width;
-            box.height = (float) rect.height() / height;
-          } else {
-            box.x = rect.x();
-            box.y = rect.y();
-            box.width = rect.width();
-            box.height = rect.height();
+
+          box.x = rect.x();
+          box.y = rect.y();
+          box.width = rect.width();
+          box.height = rect.height();
+
+          boxes.add(box);
+
+          // log.debug("box {}", box);
+
+          if (origin == null) {
+            origin = new CvPoint(width / 2, 10 /* height ?? */);
           }
 
-          list.add(box);
-
-          log.info("box {}", box);
-          
-          if (origin == null){
-            origin = new CvPoint(width/2, 10 /*height ??*/);
-          }
-          
           if (publishPolygon) {
             // CvSeq points = cvApproxPoly(contour,
             // Loader.sizeof(CvContour.class), cvStorage, CV_POLY_APPROX_DP,
             // cvContourPerimeter(contour) * 0.02, 1);
-            // CvSeq result = cvApproxPoly(contours, Loader.sizeof(CvContour.class), storage, CV_POLY_APPROX_DP, cvContourPerimeter(contours)*0.02, 0)
+            // CvSeq result = cvApproxPoly(contours,
+            // Loader.sizeof(CvContour.class), storage, CV_POLY_APPROX_DP,
+            // cvContourPerimeter(contours)*0.02, 0)
             CvSeq result = cvApproxPoly(contours, Loader.sizeof(CvContour.class), storage, CV_POLY_APPROX_DP, cvContourPerimeter(contours) * 0.02, 1);
-            for(int i = 0; i < result.total(); i++ ) {
+            for (int i = 0; i < result.total(); i++) {
               CvPoint point = new CvPoint(cvGetSeqElem(result, i));
-              log.info("point {}", point);
+              // log.debug("point {}", point);
             }
           }
           // Polygon polygon = new Polygon();
@@ -275,15 +239,26 @@ public class OpenCVFilterFloorFinder2 extends OpenCVFilter {
     }
 
     // FIXME - sources could use this too
-    data.put(list);
-    // if (publishOpenCVData) invoke("publishOpenCVData", data);
-
-    // cvPutText(display, " " + cnt, cvPoint(10, 14), font, CvScalar.RED);
-    // log.error("x");
+    data.put("Contours", boxes);
     cvClearMemStorage(storage);
+    return image;
+  }
 
-    // display(image, data);
+  List<Rectangle> boxes = new ArrayList<>();
 
+  @Override
+  public BufferedImage processDisplay(Graphics2D graphics, BufferedImage image) {
+
+    for (Rectangle box : boxes) {
+
+      int x = (int) box.x;
+      int y = (int) box.y;
+      int w = x + (int) box.width;
+      int h = y + (int) box.height;
+      graphics.drawRect(x, y, w, h);
+    }
+
+    graphics.drawString(String.format("cnt %d", boxes.size()), 10, 10);
     return image;
   }
 

@@ -3,47 +3,56 @@
  */
 package org.myrobotlab.service;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.myrobotlab.service.interfaces.NeoPixelController;
-import org.myrobotlab.test.TestUtils;
+import org.myrobotlab.test.AbstractTest;
 
 /**
  * @author chris
  *
  */
-public class NeoPixelTest {
+public class NeoPixelTest extends AbstractTest {
   private static final String V_PORT_1 = "test_port_1";
-  public Arduino ard;
+  public Arduino arduino;
   private NeoPixel neopixel;
-
 
   @Before
   public void setUp() throws Exception {
-    // setup the test environment , and create an arduino with a virtual backend for it.
-    TestUtils.initEnvirionment();
-    VirtualArduino va1 = (VirtualArduino)Runtime.createAndStart("va1", "VirtualArduino");
-    va1.connect(V_PORT_1);
-    ard = (Arduino) Runtime.createAndStart("ard", "Arduino");
-    ard.connect(V_PORT_1);
-    neopixel = (NeoPixel) Runtime.createAndStart("neopixel", "NeoPixel");
-    neopixel.attach(ard, 28, 16);
-    
+    arduino = (Arduino) Runtime.start("ard", "Arduino");
+    arduino.connect(V_PORT_1);
+    neopixel = (NeoPixel) Runtime.start("neopixel", "NeoPixel");
+    neopixel.attach(arduino, 28, 16);
+
   }
 
   /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#setPixel(int, int, int, int)}.
+   * Test method for
+   * {@link org.myrobotlab.service.NeoPixel#attach(org.myrobotlab.service.interfaces.NeoPixelController, int, int)}.
    */
   @Test
-  public void testSetPixelIntIntIntInt() {
-    neopixel.setPixel(2, 255, 0, 0);
-    assertTrue(neopixel.pixelMatrix.get(2).isEqual(new NeoPixel.PixelColor(2, 255, 0, 0)));
+  public void testAttachNeoPixelControllerIntInt() {
+    assertTrue(neopixel.isAttached);
   }
 
   /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#sendPixel(int, int, int, int)}.
+   * Test method for
+   * {@link org.myrobotlab.service.NeoPixel#detach(org.myrobotlab.service.interfaces.NeoPixelController)}.
+   */
+  @Test
+  public void testDetachNeoPixelController() {
+    neopixel.detach((NeoPixelController) arduino);
+    assertFalse(neopixel.isAttached);
+    neopixel.attach(arduino, 28, 16);
+
+  }
+
+  /**
+   * Test method for
+   * {@link org.myrobotlab.service.NeoPixel#sendPixel(int, int, int, int)}.
    */
   @Test
   public void testSendPixelIntIntIntInt() {
@@ -52,11 +61,22 @@ public class NeoPixelTest {
   }
 
   /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#writeMatrix()}.
+   * Test method for
+   * {@link org.myrobotlab.service.NeoPixel#setAnimation(java.lang.String, int, int, int, int)}.
    */
   @Test
-  public void testWriteMatrix() {
-    neopixel.writeMatrix();
+  public void testSetAnimationStringIntIntIntInt() {
+    neopixel.setAnimation("Theater Chase Rainbow", 0, 0, 255, 1);
+  }
+
+  /**
+   * Test method for
+   * {@link org.myrobotlab.service.NeoPixel#setPixel(int, int, int, int)}.
+   */
+  @Test
+  public void testSetPixelIntIntIntInt() {
+    neopixel.setPixel(2, 255, 0, 0);
+    assertTrue(neopixel.pixelMatrix.get(2).isEqual(new NeoPixel.PixelColor(2, 255, 0, 0)));
   }
 
   /**
@@ -69,32 +89,12 @@ public class NeoPixelTest {
     neopixel.turnOn();
   }
 
-
   /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#attach(org.myrobotlab.service.interfaces.NeoPixelController, int, int)}.
+   * Test method for {@link org.myrobotlab.service.NeoPixel#writeMatrix()}.
    */
   @Test
-  public void testAttachNeoPixelControllerIntInt() {
-    assertTrue(neopixel.isAttached);
-  }
-
-  /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#detach(org.myrobotlab.service.interfaces.NeoPixelController)}.
-   */
-  @Test
-  public void testDetachNeoPixelController() {
-    neopixel.detach((NeoPixelController)ard);
-    assertFalse(neopixel.isAttached);
-    neopixel.attach(ard, 28, 16);
-
-  }
-
-  /**
-   * Test method for {@link org.myrobotlab.service.NeoPixel#setAnimation(java.lang.String, int, int, int, int)}.
-   */
-  @Test
-  public void testSetAnimationStringIntIntIntInt() {
-    neopixel.setAnimation("Theater Chase Rainbow", 0, 0, 255, 1);
+  public void testWriteMatrix() {
+    neopixel.writeMatrix();
   }
 
 }

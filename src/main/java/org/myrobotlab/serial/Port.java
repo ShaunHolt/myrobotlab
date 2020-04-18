@@ -1,12 +1,11 @@
 package org.myrobotlab.serial;
 
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.myrobotlab.framework.QueueStats;
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.logging.Logging;
 import org.myrobotlab.service.interfaces.SerialDataListener;
 import org.slf4j.Logger;
 
@@ -21,21 +20,22 @@ public abstract class Port implements Runnable, SerialControl {
   public final static Logger log = LoggerFactory.getLogger(Port.class);
 
   String portName;
-  String threadName;
 
-  // needs to be owned by Serial
-  transient HashMap<String, SerialDataListener> listeners = null;
-
-  // transient CountDownLatch opened = null;
-  // transient CountDownLatch closed = null;
-
-  final transient Object lock = new Object();
+  transient HashMap<String, SerialDataListener> listeners = new HashMap<>();
 
   static int pIndex = 0;
 
-  // thread related
+  /**
+   * Thread for reading if required - in case of PortQueue and PortStream (but
+   * not PortJSSC)
+   */
   transient Thread readingThread = null;
   boolean listening = false;
+  
+
+  public boolean debug = true;
+  public boolean debugTX = true;
+  public boolean debugRX = false;
 
   QueueStats stats = new QueueStats();
 
@@ -52,6 +52,7 @@ public abstract class Port implements Runnable, SerialControl {
 
   boolean isOpen = false;
 
+  // FIXME - find a better way to handle this
   // necessary - to be able to invoke
   // "nameless" port implementation to query "hardware" ports
   // overloading a "Port" and a PortQuery - :P
@@ -74,19 +75,13 @@ public abstract class Port implements Runnable, SerialControl {
 
   public void close() {
 
-    // closed = new CountDownLatch(1);
     listening = false;
     if (readingThread != null) {
       readingThread.interrupt();
     }
     readingThread = null;
-    /*
-     * try { closed.await(); } catch (Exception e) { Logging.logError(e); }
-     */
 
-    // TODO - suppose to remove listeners ???
-    log.info(String.format("closed port %s", portName));
-
+    log.info("closed port {}", portName);
   }
 
   public String getName() {
@@ -94,6 +89,30 @@ public abstract class Port implements Runnable, SerialControl {
   }
 
   abstract public boolean isHardware();
+
+  public boolean isCTS() {
+    return false;
+  }
+
+  public boolean isDSR() {
+    return false;
+  }
+
+  public int getStopBits() {
+    return stopBits;
+  }
+
+  public int getBaudRate() {
+    return rate;
+  }
+
+  public int getDataBits() {
+    return dataBits;
+  }
+
+  public int getParity() {
+    return parity;
+  }
 
   public boolean isListening() {
     return listening;
@@ -103,34 +122,25 @@ public abstract class Port implements Runnable, SerialControl {
     return isOpen;
   }
 
-  public void listen(HashMap<String, SerialDataListener> listeners) {
-    // opened = new CountDownLatch(1);
-    // try {
-    if (this.listeners != null) {
-      log.info("here");
-    }
-    this.listeners = listeners;
+  public void listen(Map<String, SerialDataListener> listeners) {
+    this.listeners.putAll(listeners);
     if (readingThread == null) {
       ++pIndex;
-      threadName = String.format("%s.portListener %s", portName, pIndex);
-      readingThread = new Thread(this, threadName);
+      readingThread = new Thread(this, String.format("%s.portListener %s", portName, pIndex));
       readingThread.start();
-      /*
-       * - this might be a good thing .. wait until the reading thread starts -
-       * but i don't remember if JSSC works this way synchronized (lock) {
-       * lock.wait(); }
-       */
     } else {
-      log.info(String.format("%s already listening", portName));
+      log.info("{} already listening", portName);
     }
-    // Thread.sleep(100); - added connect retry logic in Arduino
-    // taking out arbitrary sleeps
-    // } catch (InterruptedException e) {
-    // }
+  }
+
+  public void listen(SerialDataListener listener) {
+    Map<String, SerialDataListener> sdl = new HashMap<>();
+    sdl.put(listener.getName(), listener);
+    listen(sdl);
   }
 
   public void open() throws IOException {
-    log.info(String.format("opening port %s", portName));
+    log.info("opening port {}", portName);
     isOpen = true;
   }
 
@@ -138,28 +148,19 @@ public abstract class Port implements Runnable, SerialControl {
 
   /**
    * reads from Ports input stream and puts it on the Serials main RX line - to
-   * be published and buffered
+   * be published and buffered - PortJSSC uses the thread of the library to "push" serial data
    */
   @Override
   public void run() {
 
-    /*
-     * - this might be a good thing .. wait until the reading thread starts -
-     * but i don't remember if JSSC works this way synchronized(lock){
-     * lock.notifyAll(); }
-     */
-
-    log.info(String.format("listening on port %s", portName));
+    log.info("listening on port {}", portName);
     listening = true;
     Integer newByte = -1;
     try {
-      // opened.countDown();
-      // TODO - if (Queue) while take()
-      // normal streams are processed here - rxtx is abnormal
       while (listening && ((newByte = read()) > -1)) { // "real" java byte
         // 255 / -1 will
         // kill this
-    	// log.info(String.format("%d",newByte));
+        // log.error(String.format("%d",newByte));
         for (String key : listeners.keySet()) {
           listeners.get(key).onByte(newByte);
           // log.info(String.format("%d",newByte));
@@ -173,25 +174,16 @@ public abstract class Port implements Runnable, SerialControl {
           for (String key : listeners.keySet()) {
             listeners.get(key).updateStats(stats);
           }
-          // publishQueueStats(stats);
           stats.lastTS = stats.ts;
         }
-        // log.info(String.format("%d",newByte));
       }
-      log.info(String.format("%s no longer listening - last byte %d ", portName, newByte));
-    } catch (InterruptedException x) {
-      log.info(String.format("InterruptedException %s stopping ", portName));
-    } catch (InterruptedIOException c) {
-      log.info(String.format("InterruptedIOException %s stopping ", portName));
-    } catch (Exception e) {
-      Logging.logError(e);
+      log.info("{} no longer listening - last byte {} ", portName, newByte);
+    } catch (InterruptedException e) {
+      log.info("port {} interrupted - stopping listener", portName);
+    } catch (Exception e1) {
+      log.error("port reading thread threw", e1);
     } finally {
-      // allow the thread calling close
-      // to proceed
-      /*
-       * if (closed != null){ closed.countDown(); }
-       */
-      log.info(String.format("stopped listening on %s", portName));
+      log.info("stopped listening on {}", portName);
     }
   }
 
@@ -199,7 +191,9 @@ public abstract class Port implements Runnable, SerialControl {
    * "real" serial function stubbed out in the abstract class in case the serial
    * implementation does not actually implement this method e.g. (bluetooth,
    * iostream, tcp/ip)
-   * @param state s
+   * 
+   * @param state
+   * 
    */
   public void setDTR(boolean state) {
   }
@@ -214,17 +208,24 @@ public abstract class Port implements Runnable, SerialControl {
    * non-active thread class.
    * 
    * needs to be buried in rxtxlib implementation
-   * @param b the byte
-   * @throws Exception TODO
+   * 
+   * @param b
+   *          the byte
+   * @throws Exception
+   *           TODO
    * 
    */
   abstract public void write(int b) throws Exception;
-  
+
   abstract public void write(int[] data) throws Exception;
 
   public boolean setParams(int rate, int dataBits, int stopBits, int parity) throws Exception {
-    // TODO Auto-generated method stub
-    return false;
+    log.debug("setSerialPortParams {} {} {} {}", rate, dataBits, stopBits, parity);
+    this.rate = rate;
+    this.dataBits = dataBits;
+    this.stopBits = stopBits;
+    this.parity = parity;
+    return true;
   }
 
 }

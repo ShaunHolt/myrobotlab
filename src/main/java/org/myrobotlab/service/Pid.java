@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -54,60 +54,71 @@ import org.slf4j.Logger;
  * http://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-
  * introduction/ This will likely get merged/replaced with Pid service.
  * 
+ * TODO - handle integral windup -
+ * https://en.wikipedia.org/wiki/PID_controller#Integral_windup
+ * 
  */
 public class Pid extends Service {
 
   public static class PidData implements Serializable {
-    
+
     private static final long serialVersionUID = 1L;
 
     /**
      * original user entered data for Kp value
      */
-    private double dispKp;
+    double dispKp;
 
     /**
      * original user entered data for Ki value
      */
-    private double dispKi;
+    double dispKi;
 
     /**
      * original user data entered for Kd value
      */
-    private double dispKd;
+    double dispKd;
 
     /**
      * (P)roportional Tuning Parameter
      */
-    private double kp;
+    double kp;
     /**
      * (I)ntegral Tuning Parameter
      */
-    private double ki;
+    double ki;
     /**
      * (D)erivative Tuning Parameter
      */
-    private double kd;
+    double kd;
 
-    private int controllerDirection;
+    int controllerDirection;
 
-    private double input; // * Pointers to the Input, Output, and Setpoint
+    double input; // * Pointers to the Input, Output, and Setpoint
     // variables
-    private double output; // This creates a hard link between the variables
+    double output; // This creates a hard link between the variables
     // and
     // the
-    private double setpoint; // Pid, freeing the user from having to
+    double setpoint; // Pid, freeing the user from having to
     // constantly
     // tell us
     // what these values are. with pointers we'll just know.
 
-    private long lastTime;
-    private double ITerm, lastInput;
+    double deadband;
 
-    private long sampleTime = 100; // default Controller Sample Time is 0.1
+    long lastTime;
+    double ITerm, lastInput;
+
+    long sampleTime = 100; // default Controller Sample Time is 0.1
     // seconds
-    private double outMin, outMax, outCenter;
-    private boolean inAuto;
+    double outMin, outMax, outCenter;
+
+    boolean inAuto;
+
+    public String toString() {
+      return String.format("kp %f ki %f kd %f direction %d input %f output %f setpoint %f deadband %f outMin %f outMax %f", kp, ki, kd, controllerDirection, input, output,
+          setpoint, deadband, outMin, outMax);
+    }
   }
 
   private static final long serialVersionUID = 1L;
@@ -124,8 +135,8 @@ public class Pid extends Service {
 
   public Map<String, PidData> data = new HashMap<String, PidData>();
 
-  public Pid(String n) {
-    super(n);
+  public Pid(String n, String id) {
+    super(n, id);
   }
 
   /*
@@ -162,9 +173,12 @@ public class Pid extends Service {
         output = piddata.outMax;
       else if (output < piddata.outMin)
         output = piddata.outMin;
-      piddata.output = output;
 
-      broadcastState();
+      if (Math.abs(piddata.output - output) > piddata.deadband) {
+        piddata.output = output;
+      }
+      // keep calm and save MORE cpu ! ( buffer overrun )
+      // broadcastState();
 
       /* Remember some variables for next time */
       piddata.lastInput = piddata.input;
@@ -220,8 +234,8 @@ public class Pid extends Service {
   }
 
   /**
-   * does all the things that need to happen to ensure a bumpless transfer
-   * from manual to automatic mode. 
+   * does all the things that need to happen to ensure a bumpless transfer from
+   * manual to automatic mode.
    */
   public void init(String key) {
     PidData piddata = data.get(key);
@@ -303,7 +317,7 @@ public class Pid extends Service {
   public void setOutputRange(String key, double min, double max) {
     PidData piddata = data.get(key);
     if (min >= max) {
-      error("min {} >= max {}", min, max);
+      error("min %.2f >= max %.2f", min, max);
       return;
     }
 
@@ -394,6 +408,11 @@ public class Pid extends Service {
     piddata.setpoint = setPoint;
   }
 
+  public void setDeadBand(String key, double deadband) {
+    PidData piddata = data.get(key);
+    piddata.deadband = deadband;
+  }
+
   /**
    * This static method returns all the details of the class without it having
    * to be constructed. It has description, categories, dependencies, and peer
@@ -437,7 +456,7 @@ public class Pid extends Service {
         pid.setInput(key, i);
         Service.sleep(30);
         if (pid.compute(key)) {
-          log.info(String.format("%d %f", i, pid.getOutput(key)));
+          log.info("{} {}", i, pid.getOutput(key));
         }
       }
 

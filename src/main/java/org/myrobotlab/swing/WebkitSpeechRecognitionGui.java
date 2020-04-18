@@ -12,35 +12,38 @@ import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
+import java.util.Map.Entry;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
-import org.myrobotlab.io.FileIO;
+import org.myrobotlab.image.Util;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.SwingGui;
-import org.myrobotlab.service.WebkitSpeechRecognition;
 import org.myrobotlab.service.WebGui;
+import org.myrobotlab.service.WebkitSpeechRecognition;
 import org.slf4j.Logger;
 
 public class WebkitSpeechRecognitionGui extends ServiceGui implements ActionListener {
 
   static final long serialVersionUID = 1L;
-  public final static Logger log = LoggerFactory.getLogger(_TemplateServiceGui.class);
+  public final static Logger log = LoggerFactory.getLogger(WebkitSpeechRecognitionGui.class);
 
   private JTextField onRecognized = new JTextField("Waiting orders...", 24);
-  BufferedImage microOn = ImageIO.read(FileIO.class.getResource("/resource/InMoov/monitor/microOn.png"));
-  BufferedImage microOff = ImageIO.read(FileIO.class.getResource("/resource/InMoov/monitor/microOff.png"));
+  BufferedImage microOn = ImageIO.read(new File(Util.getResourceDir() + File.separator+"InMoov"+File.separator+"monitor"+File.separator+"microOn.png"));
+  BufferedImage microOff = ImageIO.read(new File(Util.getResourceDir() +File.separator+"InMoov"+File.separator+"monitor"+File.separator+"microOff.png"));
 
   private JButton micro = new JButton(new ImageIcon(microOn));
-
+  JComboBox comboLanguage = new JComboBox();
   private JButton startWebGui = new JButton("Start WebGui");
   private JButton autoListen = new JButton("Auto Listening ON");
   private JButton continuous = new JButton("Speedup recognition OFF");
@@ -61,12 +64,15 @@ public class WebkitSpeechRecognitionGui extends ServiceGui implements ActionList
     continuous.setBackground(Color.RED);
     startWebGui.addActionListener(this);
     micro.addActionListener(this);
-
+    comboLanguage.addActionListener(this);
+    // for (Entry<String, String> e : i02.languages.entrySet()) {
+    // comboLanguage.addItem(e.getValue());
+    // }
     JPanel pan2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
     pan2.add(startWebGui);
     pan2.add(autoListen);
     pan2.add(continuous);
-
+    pan2.add(comboLanguage);
     display.add(pan1, BorderLayout.PAGE_START);
     display.add(pan2, BorderLayout.CENTER);
 
@@ -118,6 +124,9 @@ public class WebkitSpeechRecognitionGui extends ServiceGui implements ActionList
           }
           return;
         }
+        if (o == comboLanguage) {
+          send("setcurrentWebkitLanguage", comboLanguage.getSelectedItem());
+        }
       }
     });
   }
@@ -148,6 +157,8 @@ public class WebkitSpeechRecognitionGui extends ServiceGui implements ActionList
     SwingUtilities.invokeLater(new Runnable() {
       @Override
       public void run() {
+        removeListeners();
+        /*
         onRecognized.setText(WebkitSpeechRecognition.lastThingRecognized);
         if (WebkitSpeechRecognition.getautoListen()) {
           autoListen.setText("Auto Listening ON");
@@ -172,9 +183,24 @@ public class WebkitSpeechRecognitionGui extends ServiceGui implements ActionList
           micro.setIcon(new ImageIcon(microOff));
           listeningStatus = false;
         }
-
+        //for (Entry<String, String> e : WebkitSpeechRecognition.languages.entrySet()) {
+         // comboLanguage.addItem(e.getKey());
+        //}
+        // comboLanguage.setSelectedItem(WebkitSpeechRecognition.language);
+         * 
+         */
+        restoreListeners();
       }
     });
   }
 
+  public void removeListeners() {
+    comboLanguage.removeActionListener(this);
+
+  }
+
+  public void restoreListeners() {
+    comboLanguage.addActionListener(this);
+
+  }
 }

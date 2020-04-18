@@ -5,6 +5,7 @@ import java.awt.Container;
 import java.awt.SystemColor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
 import java.util.ArrayList;
 
 import javax.swing.ImageIcon;
@@ -52,7 +53,7 @@ public class ProgressDialog extends JDialog implements ActionListener {
   RuntimeGui parent;
 
   public ProgressDialog(RuntimeGui parent) {
-    super(parent.myService.getFrame(), "new components");
+    super(parent.swingGui.getFrame(), "new components");
     this.parent = parent;
     Container display = getContentPane();
 
@@ -99,7 +100,7 @@ public class ProgressDialog extends JDialog implements ActionListener {
   public void actionPerformed(ActionEvent event) {
     Object source = event.getSource();
     if (source == noWorky) {
-      parent.myService.noWorky();
+      parent.swingGui.noWorky();
     } else if (source == restart) {
       parent.restart();
     } else if (source == cancel) {
@@ -127,7 +128,7 @@ public class ProgressDialog extends JDialog implements ActionListener {
         reportArea.setText("");
         setVisible(true);
         actionText.setText("downloading components");
-        spinner.setIcon(new ImageIcon(ProgressDialog.class.getResource("/resource/progressBar.gif")));
+        spinner.setIcon(Util.getImageIcon("progressBar.gif"));
       }
     });
   }
@@ -142,7 +143,7 @@ public class ProgressDialog extends JDialog implements ActionListener {
         reportArea.setText("");
         setVisible(true);
         actionText.setText("checking for updates");
-        spinner.setIcon(new ImageIcon(ProgressDialog.class.getResource("/resource/progressBar.gif")));
+        spinner.setIcon(Util.getImageIcon("progressBar.gif"));
       }
     });
   }

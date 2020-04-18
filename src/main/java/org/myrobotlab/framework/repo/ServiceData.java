@@ -1,7 +1,6 @@
 package org.myrobotlab.framework.repo;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
@@ -18,7 +17,6 @@ import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.io.FileIO;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
-import org.myrobotlab.logging.LoggingFactory;
 import org.slf4j.Logger;
 
 /**
@@ -57,10 +55,13 @@ public class ServiceData implements Serializable {
 
   static private ServiceData localInstance = null;
 
-  static private String serviceDataCacheFileName = String.format("%s%sserviceData.json", FileIO.getCfgDir(), File.separator);
+  static private String serviceDataCacheFileName = FileIO.getCfgDir() + File.separator + "serviceData.json";
 
   static public ServiceData getLocalInstance() {
-    if (localInstance == null) {
+    if (localInstance != null) {
+      // return the already loaded copy.
+      return localInstance;
+    } else {
 
       // step 1 - try local file in the .myrobotlab directory
       // step 2 - extract the file from the jar
@@ -71,56 +72,60 @@ public class ServiceData implements Serializable {
       // - generate it and put it in
       // getRoot()/resource/framework/serviceData.json
 
-      File jsonFile = new File(serviceDataCacheFileName);
 
-      try {
-        log.info("try #1 loading local file {}", jsonFile);
-        String data = FileIO.toString(jsonFile);
-        if (data == null || data.length() == 0) {
-          throw new IOException("service data file [{}] contains no data");
+      // if we're not in a jar we are in an IDE.
+
+      // First check the .myrobotlab/serviceData.json dir.
+      File jsonFile = new File(serviceDataCacheFileName);
+      if (jsonFile.exists() ) {
+        // load it and return!
+        String data = null;
+        try {
+          data = FileIO.toString(jsonFile);
+        } catch (IOException e) {
+          log.warn("Error reading serviceData.json from location {}", jsonFile.getAbsolutePath());
         }
         localInstance = CodecUtils.fromJson(data, ServiceData.class);
+        log.info("Returning serviceData.json from {}", jsonFile);
         return localInstance;
-      } catch (FileNotFoundException fe) {
-        try {
-          log.info("could not find {}", serviceDataCacheFileName);
-          jsonFile.getParentFile().mkdirs();
+      } else {
+        // it didn't exist, lets either load it from the jar or generate it!
+        if (FileIO.isJar()) {
+          log.info("Extracting serviceData.json from myrobotlab.jar");
+          // extract it from the jar.
           String extractFrom = "/resource/framework/serviceData.json";
-          log.info("try #2 {} not found - extracting from {}", jsonFile.getName(), extractFrom);
-          FileIO.extract(extractFrom, jsonFile.getAbsolutePath());
-          String data = FileIO.toString(jsonFile);
-          localInstance = CodecUtils.fromJson(data, ServiceData.class);
-        } catch (Exception e) {
-          log.info("could not extract from {}", "/resource/framework/serviceData.json");
-          String newJson = FileIO.gluePaths(FileIO.getRoot(), "/resource/framework/serviceData.json");
-          log.info("try #3 serviceData.json not found in resource ! - generating and putting it in {}", newJson);
-          if (FileIO.isJar()) {
-            log.error("we are in a jar!  This is very bad!");
-          } else {
-            log.info("we are not in a jar ... ok I guess we are doing a \"refresh\" on serviceData.json");
-          }
+          jsonFile.getParentFile().mkdirs();
           try {
-            ServiceData sd = ServiceData.generate();
-            String json = CodecUtils.toJson(sd);
-
-            log.info("saving generated serviceData.json to {}", newJson);
-            FileOutputStream fos = new FileOutputStream(newJson);
-            fos.write(json.getBytes());
-            fos.close();
-            log.info("saved -- goodtimes");
-            localInstance = sd;
-          } catch (Exception e2) {
-            log.error("I've tried everything! .. I give up");
-            Logging.logError(e2);
+            FileIO.extract(extractFrom, jsonFile.getAbsolutePath());
+          } catch (IOException e) {
+            log.warn("Error extracting serviceData.json from myrobotlab.jar", e);
           }
-        }
-        localInstance.save();
-      } catch (Exception e) {
-        log.error("retrieving service data failed", e);
-      }
 
+          // at this point we should be able to load it from the extracted serviceData.json
+          String data = null;
+          try {
+            data = FileIO.toString(jsonFile);
+          } catch (IOException e) {
+            log.warn("Error reading serviceData.json from location {}", jsonFile.getAbsolutePath());
+          }
+          localInstance = CodecUtils.fromJson(data, ServiceData.class);
+          return localInstance;
+
+        } else {
+          // we are running in an IDE and haven't generated/saved the serviceData.json yet.
+          try {
+            // This must only be run as part of the build or from your IDE.  It will not work when running from a jar.
+            localInstance = ServiceData.generate();
+            localInstance.save();
+            log.info("saved generated serviceData.json to {}", serviceDataCacheFileName);
+          } catch (IOException e1) {
+            log.error("Unable to generate the serivceData.json file!!");
+            // This is a fatal issue. I think we should exit the jvm here.
+          }
+          return localInstance;
+        }
+      }
     }
-    return localInstance;
   }
 
   /**
@@ -139,7 +144,7 @@ public class ServiceData implements Serializable {
    * @throws IOException
    *           e
    */
-  static public ServiceData generate() throws IOException {
+  static public synchronized ServiceData generate() throws IOException {
     log.info("================ generating serviceData.json begin ================");
     ServiceData sd = new ServiceData();
 
@@ -152,14 +157,14 @@ public class ServiceData implements Serializable {
     for (int i = 0; i < services.size(); ++i) {
 
       String fullClassName = services.get(i);
-      log.info("querying {}", fullClassName);
+      log.debug("querying {}", fullClassName);
       try {
         Class<?> theClass = Class.forName(fullClassName);
         Method method = theClass.getMethod("getMetaData");
         ServiceType serviceType = (ServiceType) method.invoke(null);
 
         if (!fullClassName.equals(serviceType.getName())) {
-          log.error(String.format("Class name %s not equal to the ServiceType's name %s", fullClassName, serviceType.getName()));
+          log.error("Class name {} not equal to the ServiceType's name {}", fullClassName, serviceType.getName());
         }
 
         sd.add(serviceType);
@@ -179,7 +184,7 @@ public class ServiceData implements Serializable {
         }
 
       } catch (Exception e) {
-        log.error(String.format("%s does not have a static getMetaData method", fullClassName));
+        log.error("{} does not have a static getMetaData method", fullClassName);
       }
     }
     log.info("================ generating serviceData.json end ================");
@@ -341,40 +346,43 @@ public class ServiceData implements Serializable {
   public static void main(String[] args) {
     try {
 
-      LoggingFactory.init();
-      // LoggingFactory.getInstance().setLevel("INFO");
-      // LoggingFactory.getInstance().addAppender(Appender.FILE);
+      // LoggingFactory.init(); - don't change logging for mvn
       String path = "";
       if (args.length > 0) {
         path = args[0];
+      } else {
+        path = ".";
       }
 
-      String filename = FileIO.gluePaths(path, "serviceData.json");
+      String filename = path + File.separator + "serviceData.json";
       log.info("generating {}", filename);
       if (path.length() > 0) {
         new File(path).mkdirs();
       }
 
+      // remove pre-existing filename
+      File removeExisting = new File(filename);
+      removeExisting.delete();
+
+      // remove .myrobotlab/serviceData.json
+      // 20190630 - GroG changed uses FileIO.getCfgDir()
+      removeExisting = new File(FileIO.getCfgDir() + File.separatorChar + "serviceData.json");
+      removeExisting.delete();
+
       // THIS IS FOR ANT BUILD - DO NOT CHANGE !!! - BEGIN ----
       ServiceData sd = generate();
-      FileOutputStream fos = new FileOutputStream(filename);
-      fos.write(CodecUtils.toJson(sd).getBytes());
-      fos.close();
-      // THIS IS FOR ANT BUILD - DO NOT CHANGE !!! - END ----
-      
-      
-      
+      // save a copy to the resources folder so it can be bundled in the jar.
+      sd.save(filename);
+      // save to the .myrobotlab directory also..
+      sd.save();
 
     } catch (Exception e) {
       Logging.logError(e);
       System.exit(-1);
     }
-    
-    
+
     // System.exit(0);
-    
-    
-    
+
   }
 
 }

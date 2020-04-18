@@ -8,16 +8,16 @@ public abstract class AbstractVideoSource extends Service implements VideoSource
 
   private static final long serialVersionUID = 1L;
 
-  public AbstractVideoSource(String reservedKey) {
-    super(reservedKey);
+  public AbstractVideoSource(String n, String id) {
+    super(n, id);
   }
 
   @Override
-  public boolean attach(VideoSink vs){
+  public boolean attach(VideoSink vs) {
     subscribe(vs.getName(), "publishDisplay");
     return true;
   }
-  
+
   @Override
   public boolean detach(VideoSink vs) {
     unsubscribe(vs.getName(), "publishDisplay");

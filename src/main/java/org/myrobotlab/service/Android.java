@@ -70,8 +70,8 @@ public class Android extends Service {
     }
   }
 
-  public Android(String n) {
-    super(n);
+  public Android(String n, String id) {
+    super(n, id);
   }
 
   /**
@@ -86,9 +86,9 @@ public class Android extends Service {
 
     ServiceType meta = new ServiceType(Android.class.getCanonicalName());
     meta.addDescription("re-publishes Android proximity and position information");
-    meta.addCategory("sensor");
+    meta.addCategory("sensors");
     meta.setLicenseApache();
-    
+
     return meta;
   }
 

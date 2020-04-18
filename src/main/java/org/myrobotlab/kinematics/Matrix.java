@@ -4,6 +4,9 @@ import java.io.Serializable;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 
+import org.myrobotlab.logging.LoggerFactory;
+import org.slf4j.Logger;
+
 /**
  * Encapsulates a 4x4 matrix
  *
@@ -11,6 +14,8 @@ import java.text.NumberFormat;
  */
 public class Matrix implements Serializable {
 
+  public final static Logger log = LoggerFactory.getLogger(Matrix.class);
+  
   private static final long serialVersionUID = 1L;
 
   protected int numRows;
@@ -20,9 +25,12 @@ public class Matrix implements Serializable {
   public double[][] elements;
 
   /**
-   * @param sx scaling in the x direction
-   * @param sy scaling in the y direction
-   * @param sz scaling in the z direction
+   * @param sx
+   *          scaling in the x direction
+   * @param sy
+   *          scaling in the y direction
+   * @param sz
+   *          scaling in the z direction
    * @return the associated scaling transformation matrix
    */
   public static Matrix scaling(double sx, double sy, double sz) {
@@ -35,9 +43,12 @@ public class Matrix implements Serializable {
   }
 
   /**
-   * @param tx translations in the x direction
-   * @param ty translations in the y direction         
-   * @param tz translations in the z direction
+   * @param tx
+   *          translations in the x direction
+   * @param ty
+   *          translations in the y direction
+   * @param tz
+   *          translations in the z direction
    * @return the associated translation transformation matrix
    */
   public static Matrix translation(double tx, double ty, double tz) {
@@ -148,7 +159,7 @@ public class Matrix implements Serializable {
    */
   public Matrix addTo(Matrix m) {
     if (numRows != m.numRows || numCols != m.numCols) {
-      System.out.println("dimensions bad in addTo()");
+      log.info("dimensions bad in addTo()");
       return null;
     }
     Matrix ret = new Matrix(numRows, numCols);
@@ -170,7 +181,7 @@ public class Matrix implements Serializable {
    */
   public Double dot(Matrix m) {
     if (numRows != m.numRows || numCols != m.numCols) {
-      System.out.println("dimensions bad in dot()");
+      log.info("dimensions bad in dot()");
       return 0.0;
     }
     double sum = 0;
@@ -226,10 +237,9 @@ public class Matrix implements Serializable {
   public Matrix multiply(Matrix m) {
     Matrix ret = new Matrix(numRows, m.numCols);
     if (numCols != m.numRows) {
-      System.out.println("dimensions bad in multiply()");
+      log.info("dimensions bad in multiply()");
       return ret;
     }
-
 
     for (int r = 0; r < numRows; r++)
       for (int c = 0; c < m.numCols; c++) {
@@ -253,23 +263,23 @@ public class Matrix implements Serializable {
     Matrix ak = new Matrix(numRows, 1);
     Matrix dk, ck, bk;
     Matrix R_plus;
-    try{
+    try {
       for (r = 0; r < numRows; r++) {
         ak.elements[r][0] = this.elements[r][0];
       }
-  
+
       if (!ak.equals(0.0)) {
         R_plus = ak.transpose().multiply(1.0 / (ak.dot(ak)));
       } else {
         R_plus = new Matrix(1, numCols);
       }
-  
+
       while (k < this.numCols) {
-  
+
         for (r = 0; r < numRows; r++) {
           ak.elements[r][0] = this.elements[r][k];
         }
-  
+
         dk = R_plus.multiply(ak);
         Matrix T = new Matrix(numRows, k);
         for (r = 0; r < numRows; r++) {
@@ -278,16 +288,16 @@ public class Matrix implements Serializable {
           }
         }
         ck = ak.subtractFrom(T.multiply(dk));
-  
+
         if (!ck.equals(0.0)) {
           bk = ck.transpose().multiply(1.0 / (ck.dot(ck)));
         } else {
           bk = dk.transpose().multiply(1.0 / (1.0 + dk.dot(dk))).multiply(R_plus);
         }
-  
+
         Matrix N = R_plus.subtractFrom(dk.multiply(bk));
         R_plus = new Matrix(N.numRows + 1, N.numCols);
-  
+
         for (r = 0; r < N.numRows; r++) {
           for (c = 0; c < N.numCols; c++) {
             R_plus.elements[r][c] = N.elements[r][c];
@@ -299,8 +309,7 @@ public class Matrix implements Serializable {
         k++;
       }
       return R_plus;
-    }
-    catch (ArrayIndexOutOfBoundsException e){
+    } catch (ArrayIndexOutOfBoundsException e) {
       return null;
     }
   }
@@ -313,7 +322,7 @@ public class Matrix implements Serializable {
   public Matrix subtractFrom(Matrix m) {
     Matrix ret = new Matrix(numRows, numCols);
     if (numRows != m.numRows || numCols != m.numCols) {
-      System.out.println("dimensions bad in substractFrom()");
+      log.info("dimensions bad in substractFrom()");
       return ret;
     }
 

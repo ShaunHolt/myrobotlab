@@ -1,23 +1,30 @@
 package org.myrobotlab.opencv;
 
-import org.bytedeco.javacpp.opencv_core.CvPoint;
-import org.bytedeco.javacpp.opencv_core.CvScalar;
-import org.bytedeco.javacpp.opencv_imgproc.CvFont;
+import java.awt.Color;
 
 public class Overlay {
 
   public String text;
-  public CvPoint pos;
-  public CvFont font;
-  public CvScalar color;
+  public int x;
+  public int y;
+  public Color color;
 
-  public Overlay(String text, CvPoint pos, CvScalar color, CvFont font) {
+  public Overlay(int x, int y, String text) {
+    this.x = x;
+    this.y = y;
     this.text = text;
-    this.pos = pos;
-    // NOTE: in order for this font to be used, it must be initialized with
-    // cvInitFont(font, CV_FONT_HERSHEY_PLAIN, 1.0,1.0)
-    this.font = font;
-    this.color = color;
+  }
+
+  public Overlay(int x, int y, String text, String color) {
+    this.x = x;
+    this.y = y;
+    this.text = text;
+
+    if (color != null) {
+      // "#FFCCEE"
+      this.color = Color.decode(color);
+    }
+
   }
 
 }

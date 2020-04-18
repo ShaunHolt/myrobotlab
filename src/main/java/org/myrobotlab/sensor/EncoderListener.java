@@ -1,7 +1,9 @@
 package org.myrobotlab.sensor;
 
-public interface EncoderListener {
+import org.myrobotlab.framework.interfaces.Attachable;
 
-  void pulse();
+public interface EncoderListener extends Attachable {
+
+  void onEncoderData(EncoderData data);
 
 }

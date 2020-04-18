@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -63,7 +63,9 @@ public class Adafruit16CServoDriverGui extends ServiceGui implements ActionListe
     super(boundServiceName, myService);
     boundService = (Adafruit16CServoDriver) Runtime.getService(boundServiceName);
 
-    // addTopLine(controllerLabel, controllerList, deviceBusLabel, deviceBusList, deviceAddressLabel, deviceAddressList, attachButton);
+    // addTopLine(controllerLabel, controllerList, deviceBusLabel,
+    // deviceBusList, deviceAddressLabel, deviceAddressList,
+    // attachButton);
     addTopLine(createFlowPanel("input", attachButton, "Controller", controllerList, "Bus", deviceBusList, "Address", deviceAddressList));
 
     refreshControllers();
@@ -83,10 +85,10 @@ public class Adafruit16CServoDriverGui extends ServiceGui implements ActionListe
           if (attachButton.getText().equals(attach)) {
             int index = controllerList.getSelectedIndex();
             if (index != -1) {
-              myService.send(boundServiceName, attach, controllerList.getSelectedItem(), deviceBusList.getSelectedItem(), deviceAddressList.getSelectedItem());
+              swingGui.send(boundServiceName, attach, controllerList.getSelectedItem(), deviceBusList.getSelectedItem(), deviceAddressList.getSelectedItem());
             }
           } else {
-            myService.send(boundServiceName, detach, controllerList.getSelectedItem());
+            swingGui.send(boundServiceName, detach, controllerList.getSelectedItem());
           }
         }
       }
@@ -150,7 +152,7 @@ public class Adafruit16CServoDriverGui extends ServiceGui implements ActionListe
     for (int i = 0; i < v.size(); ++i) {
       controllerList.addItem(v.get(i));
     }
-    
+
     if (boundService.controller != null) {
       controllerList.setSelectedItem(boundService.controller.getName());
     }

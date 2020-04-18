@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.myrobotlab.logging.LoggerFactory;
-import org.myrobotlab.logging.Logging;
 import org.slf4j.Logger;
 
 import jssc.SerialPort;
@@ -26,215 +25,214 @@ import jssc.SerialPortList;
  */
 public class PortJSSC extends Port implements SerialControl, SerialPortEventListener, Serializable {
 
-	private static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 1L;
 
-	public final static Logger log = LoggerFactory.getLogger(PortJSSC.class);
+  public final static Logger log = LoggerFactory.getLogger(PortJSSC.class);
 
-	transient SerialPort port = null;
+  transient SerialPort port = null;
 
-	public boolean debug = true;
-	public boolean debugTX = true;
-	public boolean debugRX = false;
+  public PortJSSC() {
+    super();
+  }
 
-	public PortJSSC() {
-		super();
-	}
+  public PortJSSC(String portName, int rate, int dataBits, int stopBits, int parity) throws IOException {
+    super(portName, rate, dataBits, stopBits, parity);
+  }
 
-	public PortJSSC(String portName, int rate, int dataBits, int stopBits, int parity) throws IOException {
-		super(portName, rate, dataBits, stopBits, parity);
-		// commPortId = CommPortIdentifier.getPortIdentifier(portName);
-	}
+  @Override
+  public boolean isOpen() {
+    if (port != null) {
+      return port.isOpened();
+    }
+    return false;
+  }
 
-	/*
-	 * public int available() throws IOException { port. return in.available();
-	 * }
-	 */
+  // FIXME - better way to handle this across all port types
+  @Override
+  public List<String> getPortNames() {
 
-	public boolean isOpen() {
-		if (port != null) {
-			return port.isOpened();
-		}
-		return false;
-	}
+    ArrayList<String> ret = new ArrayList<String>();
+    try {
+      String[] portNames = SerialPortList.getPortNames();
+      for (int i = 0; i < portNames.length; i++) {
+        ret.add(portNames[i]);
+        log.info(portNames[i]);
+      }
+    } catch (Exception e) {
+      log.error("getPortNames threw", e);
+    }
+    return ret;
+  }
 
-	public int getBaudRate() {
-		return rate;
-	}
+  public boolean isCTS() {
+    try {
+      return port.isCTS();
+    } catch (SerialPortException e) { /* don't care */
+    }
+    return false;
+  }
 
-	public int getDataBits() {
-		return dataBits;
-	}
+  public boolean isDSR() {
+    try {
+      return port.isDSR();
+    } catch (SerialPortException e) {/* don't care */
+    }
+    return false;
+  }
 
-	@Override
-	public String getName() {
-		return portName;
-	}
+  @Override
+  public void open() throws IOException {
+    try {
+      port = new SerialPort(portName);
+      port.openPort();
+      port.setParams(rate, dataBits, stopBits, parity);
+      // TODO - add self as a event listener, and listen to MASK_RXCHAR
+      // it would probably be a good idea to register for "all" then filter on
+      // the SerialEvent - then
+      // it would be easier to get notified on other events besides just serial
+      // reads .. eg. dtr etc..
+      port.addEventListener(this, SerialPort.MASK_RXCHAR);
+    } catch (Exception e) {
+      throw new IOException(String.format("could not open port %s  rate %d dataBits %d stopBits %d parity %d", portName, rate, dataBits, stopBits, parity), e);
+    }
+  }
 
-	public int getParity() {
-		return parity;
-	}
+  @Override
+  public void close() {
+    try {
 
-	@Override
-	public List<String> getPortNames() {
+      listening = false;
 
-		ArrayList<String> ret = new ArrayList<String>();
-		try {
-			String[] portNames = SerialPortList.getPortNames();
-			for (int i = 0; i < portNames.length; i++) {
-				ret.add(portNames[i]);
-				System.out.println(portNames[i]);
-			}
-		} catch (Exception e) {
-			Logging.logError(e);
-		}
-		return ret;
-	}
+      port.closePort();
+      // FIXME - JSSC issue (IMHO)
+      // if a listener doesn't exist it throws ? meh :P
+      // port.removeEventListener();
+      // port.notifyOnDataAvailable(false);
+    } catch (Exception e) {
+      log.error("close threw", e);
+    }
+    port = null;
+  }
 
-	public int getStopBits() {
-		return stopBits;
-	}
+  /**
+   * FIXME - the "int read()" should provide a timeout to be supplied ! This
+   * needs refactoring in the interface
+   */
+  @Override
+  public int read() throws Exception {
+    return read(1, 20000)[0];
+  }
 
-	public boolean isCTS() throws SerialPortException {
-		return port.isCTS();
-	}
+  /**
+   * FIXME - this more powerful read should be propegated up to the interface
+   * 
+   * @param numbytes
+   * @param timeout
+   * @return
+   * @throws Exception
+   */
+  public int[] read(int numbytes, int timeout) throws Exception {
+    return port.readIntArray(numbytes, timeout);
+  }
 
-	public boolean isDSR() throws SerialPortException {
-		return port.isDSR();
-	}
+  @Override
+  public void setDTR(boolean state) {
+    try {
+      port.setDTR(state);
+    } catch (Exception e) {
+      log.error("setDTR threw", e);
+    }
+  }
 
-	@Override
-	public void open() throws IOException {
-		try {
-			port = new SerialPort(portName);
-			port.openPort();
-			port.setParams(rate, dataBits, stopBits, parity);
-		} catch (Exception e) {
-			throw new IOException(String.format("could not open port %s  rate %d dataBits %d stopBits %d parity %d", portName, rate, dataBits, stopBits, parity), e);
-		}
-	}
+  @Override
+  public boolean setParams(int rate, int dataBits, int stopBits, int parity) throws Exception {
+    super.setParams(rate, dataBits, stopBits, parity);
+    try {
+      if (port == null || !port.isOpened()) {
+        log.error("port not opened or is null");
+        return false;
+      }
 
-	public void close() {
-		try {
+      return port.setParams(rate, dataBits, stopBits, parity);
+    } catch (Exception e) {
+      throw new IOException(e);
+    }
+  }
 
-			listening = false;
-			readingThread = null;// is dead anyway
+  public void setRTS(boolean state) {
+    try {
+      port.setRTS(state);
+    } catch (Exception e) {
+      log.error("setRTS threw", e);
+    }
+  }
 
-			port.closePort();
-			// FIXME - JSSC issue (IMHO)
-			// if a listener doesn't exist it throws ? meh :P
-			// port.removeEventListener();
-			// port.notifyOnDataAvailable(false);
-		} catch (Exception e) {
-			Logging.logError(e);
-		}
-		port = null;
-	}
+  @Override
+  public void run() {
+    log.info("PortJSSC started - will be using jssc library thread to push serial events");
+  }
 
-	// / FIXME KLUDGY !!!!!
+  @Override
+  public void write(int data) throws Exception {
+    port.writeInt(data);
+  }
 
-	@Override
-	public int read() throws Exception {
-		int data = port.readIntArray(1)[0];
-		if (debug && debugRX) {
-			log.info("Read : {}", data);
-		}
-		return data;
-	}
+  /**
+   * Java made a mistake having InputStream and OutputStream abstract
+   * classes vs interfaces - perhaps a PortInputStream and PortOutputStream can
+   * be created in the future....
+   */
+  public void write(int[] data) throws Exception {
+    // use the writeIntArray method to batch this operation.
+    if (debug && debugTX) {
+      StringBuilder b = new StringBuilder();
+      for (int i = 0; i < data.length; i++) {
+        b.append("" + Integer.toString(data[i]) + "");
+        if (i != data.length - 1)
+          b.append(",");
+      }
+      log.debug("Sending Int Array: {}", b);
+    }
 
-	@Override
-	public void setDTR(boolean state) {
-		try {
-			port.setDTR(state);
-		} catch (Exception e) {
-			Logging.logError(e);
-		}
-	}
+    port.writeIntArray(data);
+  }
 
-	@Override
-	public boolean setParams(int rate, int dataBits, int stopBits, int parity) throws Exception {
-		log.debug(String.format("setSerialPortParams %d %d %d %d", rate, dataBits, stopBits, parity));
-		try {
-			if (port == null || !port.isOpened()) {
-				log.error("port not opened or is null");
-				return false;
-			}
+  @Override
+  public boolean isHardware() {
+    return true;
+  }
 
-			return port.setParams(rate, dataBits, stopBits, parity);
-		} catch (Exception e) {
-			throw new IOException(e);
-		}
-	}
+  /**
+   * This is call back from jssc library - pushing serial data
+   * 
+   */
+  @Override
+  public void serialEvent(SerialPortEvent event) {
+    // FYI - if you want more events processed here - you need to register them
+    // in setParams
+    if (event.isRXCHAR()) {// If data is available
 
-	public void setRTS(boolean state) {
-		try {
-			port.setRTS(state);
-		} catch (Exception e) {
-			Logging.logError(e);
-		}
-	}
+      log.debug("Serial Receive Event fired.");
+      byte[] buffer = null;
+      try {
+        buffer = this.port.readBytes(event.getEventValue());
+        for (int i = 0; i < buffer.length; i++) {
 
-	@Override
-	public void write(int data) throws Exception {
-		port.writeInt(data);
-	}
-
-	// FIXME - check to make sure these are the same as InputStream &
-	// OutputStream
-	public void write(int[] data) throws Exception {
-		// use the writeIntArray method to batch this operation.
-		if (debug && debugTX) {
-			StringBuilder b = new StringBuilder();
-			for (int i = 0; i < data.length; i++) {
-				b.append("" + Integer.toString(data[i]) + "");
-				if (i != data.length - 1)
-					b.append(",");
-			}
-			log.debug("Sending Int Array: {}", b);
-		}
-
-		port.writeIntArray(data);
-	}
-
-	@Override
-	public boolean isHardware() {
-		return true;
-	}
-
-	/**
-	 * rxtxlib's "serial event handling" - would be more simple if they just
-	 * implemented InputStream correctly :P
-	 */
-	@Override
-	public void serialEvent(SerialPortEvent event) {
-		log.info(String.format("rxtx event on port %s", portName));
-
-		Integer newByte = -1;
-
-		try {
-			while (listening && ((newByte = read()) > -1)) {
-				// listener.onByte(newByte); // <-- FIXME ?? onMsg() < ???
-				for (String key : listeners.keySet()) {
-					listeners.get(key).onByte(newByte);
-				}
-				++stats.total;
-				if (stats.total % stats.interval == 0) {
-					stats.ts = System.currentTimeMillis();
-					log.error(String.format("===stats - dequeued total %d - %d bytes in %d ms %d Kbps", stats.total, stats.interval, stats.ts - stats.lastTS,
-							8 * stats.interval / (stats.ts - stats.lastTS)));
-					// publishQueueStats(stats);
-					stats.lastTS = stats.ts;
-				}
-				// log.info(String.format("%d",newByte));
-				// rxtx leave whenever it has no new data to delver with a -1
-				// which is not what an Java InputStream is supposed to do..
-			}
-
-			log.info(String.format("%d", newByte));
-		} catch (Exception e) {
-			++rxErrors;
-			Logging.logError(e);
-		}
-
-	}
-
+          for (String key : listeners.keySet()) {
+            listeners.get(key).onByte((int) (buffer[i] & 0xFF));
+          }
+          ++stats.total;
+          if (stats.total % stats.interval == 0) {
+            stats.ts = System.currentTimeMillis();
+            log.info("===stats - dequeued total {} - {} bytes in {} ms {} Kbps", stats.total, stats.interval, stats.ts - stats.lastTS,
+                8 * stats.interval / (stats.ts - stats.lastTS));
+            // publishQueueStats(stats);
+            stats.lastTS = stats.ts;
+          }
+        }
+      } catch (Exception e) {
+        log.error("serialEvent readBytes threw", e);
+      }
+    }
+  }
 }

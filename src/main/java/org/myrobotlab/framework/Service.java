@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -39,35 +39,32 @@ import java.lang.reflect.Type;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.text.SimpleDateFormat;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SimpleTimeZone;
 import java.util.Timer;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.myrobotlab.cache.LRUMethodCache;
 import org.myrobotlab.codec.CodecUtils;
-import org.myrobotlab.codec.Recorder;
 import org.myrobotlab.framework.interfaces.Attachable;
 import org.myrobotlab.framework.interfaces.Invoker;
 import org.myrobotlab.framework.interfaces.NameProvider;
 import org.myrobotlab.framework.interfaces.ServiceInterface;
 import org.myrobotlab.io.FileIO;
+import org.myrobotlab.lang.LangUtils;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
-import org.myrobotlab.net.CommunicationManager;
-import org.myrobotlab.net.Heartbeat;
 import org.myrobotlab.service.Runtime;
 import org.myrobotlab.service.interfaces.AuthorizationProvider;
-import org.myrobotlab.service.interfaces.CommunicationInterface;
+import org.myrobotlab.service.interfaces.Gateway;
 import org.myrobotlab.service.interfaces.QueueReporter;
 import org.slf4j.Logger;
 
@@ -82,38 +79,18 @@ import org.slf4j.Logger;
  * messages.
  * 
  */
-public abstract class Service extends MessageService implements Runnable, Serializable, ServiceInterface, Invoker, QueueReporter {
+public abstract class Service implements Runnable, Serializable, ServiceInterface, Invoker, QueueReporter {
 
   // FIXME upgrade to ScheduledExecutorService
   // http://howtodoinjava.com/2015/03/25/task-scheduling-with-executors-scheduledthreadpoolexecutor-example/
-  /*
-   * protected class Task extends TimerTask { String taskName; Message msg; long
-   * interval = 0;
-   * 
-   * public Task(String taskName, long interval, Message msg) { this.msg = msg;
-   * this.interval = interval; this.taskName = taskName; }
-   * 
-   * public Task(Task s) { this.msg = s.msg; this.interval = s.interval;
-   * this.taskName = s.taskName; }
-   * 
-   * @Override public void run() { // info("task %s running - next run %s",
-   * taskName, // MathUtils.msToString(interval)); getInbox().add(msg);
-   * 
-   * if (interval > 0) { Task t = new Task(this); // clear history list -
-   * becomes "new" message t.msg.historyList.clear(); Timer timer =
-   * tasks.get(taskName); if (timer != null) { // timer = new
-   * Timer(String.format("%s.timer", getName())); try { timer.schedule(t,
-   * interval); } catch (IllegalStateException e) { } } } }
-   * 
-   * }
-   */
+
   /**
    * contains all the meta data about the service - pulled from the static
    * method getMetaData() each instance will call the method and populate the
    * data for an instance
    * 
    */
-  ServiceType serviceType;
+  protected ServiceType serviceType;
 
   /**
    * a radix-tree of data -"DNA" Description of Neighboring Automata ;) this is
@@ -137,6 +114,12 @@ public abstract class Service extends MessageService implements Runnable, Serial
    */
   transient static public final TreeMap<String, ServiceReservation> dnaPool = new TreeMap<String, ServiceReservation>();
 
+  /**
+   * service type can override the location of its resource directory if specified on the command line
+   * --resource-override {ServiceType} {location} {ServiceType} {location} ...
+   */
+  static protected Map<String,String> resourceOverrides = new HashMap<>();
+  
   private static final long serialVersionUID = 1L;
 
   transient public final static Logger log = LoggerFactory.getLogger(Service.class);
@@ -148,63 +131,93 @@ public abstract class Service extends MessageService implements Runnable, Serial
    */
   private URI instanceId = null;
 
+  /**
+   * unique name of the service (eqv. hostname)
+   */
   private String name;
 
-  private String simpleName; // used in gson encoding for getSimpleName()
+  /**
+   * unique id - (eqv. domain suffix)
+   */
+  protected String id;
 
-  private String serviceClass;
+  protected String simpleName; // used in gson encoding for getSimpleName()
+
+  protected String serviceClass;
 
   private boolean isRunning = false;
 
   transient protected Thread thisThread = null;
 
   transient protected Inbox inbox = null;
+  transient protected Outbox outbox = null;
+  
+  protected String serviceVersion = null;
+  
+  /**
+   * for promoting portability and good pathing
+   */
+  transient protected static String fs = File.separator;
 
-  transient Timer timer = null;
+  /**
+   * for promoting portability and good pathing
+   */
+  transient protected String ps = File.pathSeparator;
 
   /**
    * a more capable task handler
    */
   transient HashMap<String, Timer> tasks = new HashMap<String, Timer>();
 
-  protected boolean allowDisplay = true;
+  // public final static String cfgDir = FileIO.getCfgDir();
 
-  public final static String cfgDir = FileIO.getCfgDir();
+  /**
+   * used as a static cache for quick method name testing FIXME - if you make
+   * this static it borks things - not sure why this should be static info and
+   * should not be a member variable !
+   */
+  transient protected Set<String> methodSet;
 
-  // no longer transient - getMethodMap is not really needed
-  protected Set<String> methodSet;
-
-  // :P - gson will default convert a HashSet into an Array :(
-  // So we need to make it a HashMap in order for gson to convert to an object
+  /**
+   * This is the map of interfaces - its really "static" information, since its
+   * a definition. However, since gson will not process statics - we are making
+   * it a member variable
+   */
   protected Map<String, String> interfaceSet;
 
-  transient protected SimpleDateFormat tsFormatter = new SimpleDateFormat("yyyyMMddHHmmssSSS");
-
-  transient protected Calendar cal = Calendar.getInstance(new SimpleTimeZone(0, "GMT"));
-
-  // recordings
-  // static private boolean isRecording = false;
-  static private Recorder recorder = null;
-
-  transient public final String MESSAGE_RECORDING_FORMAT_XML = "MESSAGE_RECORDING_FORMAT_XML";
-
-  transient public final String MESSAGE_RECORDING_FORMAT_BINARY = "MESSAGE_RECORDING_FORMAT_BINARY";
+  /**
+   * order which this service was created
+   */
+  Integer creationOrder;
 
   // FIXME SecurityProvider
-  protected static AuthorizationProvider security = null;
+  protected AuthorizationProvider authProvider = null;
 
-  private Status lastError = null;
-  
+  protected Status lastError = null;
+  protected Long lastErrorTs = null;
+  protected Status lastStatus = null;
+  protected Long lastStatusTs = null;
+  protected long statusBroadcastLimitMs = 1000;
+
   /**
    * variable for services to virtualize some of their dependencies
    */
   protected boolean isVirtual = false;
 
   /**
+   * overload this if your service needs other environmental or dependencies to
+   * be ready
+   */
+  protected boolean ready = true;
+
+  /**
    * Recursively builds Peer type information - which is not instance specific.
    * Which means it will not prefix any of the branches with a instance name
-   * @param myKey m
-   * @param serviceClass class 
+   * 
+   * @param myKey
+   *          m
+   * @param serviceClass
+   *          class
    * @return a map of string to service reservation
    * 
    */
@@ -228,14 +241,6 @@ public abstract class Service extends MessageService implements Runnable, Serial
     }
     return set;
   }
-
-  /*
-   * public static Set<String> getPeerNames (String myKey){ // goes to dnaPool
-   * TreeSet<String> set = new TreeSet<String>(); return set; }
-   * 
-   * public static Set<String> getPeerKeys (String myKey){ // goes to template
-   * TreeSet<String> set = new TreeSet<String>(); return set; }
-   */
 
   public String getPeerName(String fullKey) {
     // String fullKey = String.format("%s.%s", getName(), peerKey);
@@ -287,10 +292,11 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   /**
-   * this method returns the current build strucutre for which name &amp; type is
-   * specified
+   * this method returns the current build strucutre for which name &amp; type
+   * is specified
    * 
-   * @param dna - a.k.a myDna which information will be added to
+   * @param dna
+   *          - a.k.a myDna which information will be added to
    * @param myKey
    *          - key (name) instance of the class currently under construction
    * @param serviceClass
@@ -322,7 +328,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
       ServiceType st = (ServiceType) method.invoke(null);
       Map<String, ServiceReservation> peers = st.getPeers();
 
-      log.info(String.format("processing %s.getPeers(%s) will process %d peers", serviceClass, myKey, peers.size()));
+      log.info("processing {}.getPeers({}) will process {} peers", serviceClass, myKey, peers.size());
 
       // Breadth first recursion
       // Two loops are necessary - because recursion should not start
@@ -340,7 +346,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
         String fullKey = String.format("%s.%s", myKey, peerKey);
         ServiceReservation rna = dnaPool.get(fullKey);
 
-        log.info(String.format("(%s) - [%s]", fullKey, templatePeer.actualName));
+        log.info("({}) - [{}]", fullKey, templatePeer.actualName);
 
         if (rna == null) {
           // there is no reservation for this in the dnaPool (no
@@ -350,10 +356,10 @@ public abstract class Service extends MessageService implements Runnable, Serial
           if (!templatePeer.isRoot) {
             templatePeer.actualName = String.format("%s.%s", myKey, templatePeer.actualName);
           }
-          log.info(String.format("dna adding new key %s %s %s %s", fullKey, templatePeer.actualName, templatePeer.fullTypeName, comment));
+          log.info("dna adding new key {} {} {} {}", fullKey, templatePeer.actualName, templatePeer.fullTypeName, comment);
           dna.put(fullKey, templatePeer);
         } else {
-          log.info(String.format("dna collision - replacing null values !!! %s", fullKey));
+          log.info("dna collision - replacing null values !!! {}", fullKey);
           StringBuffer sb = new StringBuffer();
           if (rna.actualName == null) {
             sb.append(String.format(" updating actualName to %s ", templatePeer.actualName));
@@ -379,7 +385,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
       } // for each peer
 
     } catch (Exception e) {
-      log.error(String.format("%s does not have a getMetaData ", fullClassName));
+      log.error("{} does not have a getMetaData ", fullClassName);
     }
 
     return dna;
@@ -397,81 +403,102 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   /**
    * copyShallowFrom is used to help maintain state information with
-   * @param target t
-   * @param source s
+   * 
+   * @param target
+   *          t
+   * @param source
+   *          s
    * @return o
    */
   public static Object copyShallowFrom(Object target, Object source) {
     if (target == source) { // data is myself - operating on local copy
       return target;
     }
+    Set<Class<?>> ancestry = new HashSet<Class<?>>();
+    Class<?> targetClass = source.getClass();
 
-    Class<?> sourceClass = source.getClass();
-    Class<?> targetClass = target.getClass();
-    Field fields[] = sourceClass.getDeclaredFields();
-    for (int j = 0, m = fields.length; j < m; j++) {
-      try {
-        Field f = fields[j];
+    ancestry.add(targetClass);
 
-        int modifiers = f.getModifiers();
-
-        // if (Modifier.isPublic(mod)
-        // !(Modifier.isPublic(f.getModifiers())
-        // Hmmm JSON mappers do hacks to get by
-        // IllegalAccessExceptions.... Hmmmmm
-
-        // GROG - recent change from this
-        // if ((!Modifier.isPublic(modifiers)
-        // to this
-        String fname = f.getName();
-        /*
-         * if (fname.equals("desktops") || fname.equals("useLocalResources") ){
-         * log.info("here"); }
-         */
-
-        if (Modifier.isPrivate(modifiers) || fname.equals("log") || Modifier.isTransient(modifiers) || Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
-          log.debug(String.format("skipping %s", f.getName()));
-          continue;
-        }
-        Type t = f.getType();
-
-        // log.info(String.format("setting %s", f.getName()));
-        /*
-         * if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
-         * continue; }
-         */
-
-        // GroG - this is new 1/26/2017 - needed to get webgui data to
-        // load
-        f.setAccessible(true);
-        Field targetField = targetClass.getDeclaredField(f.getName());
-        targetField.setAccessible(true);
-
-        if (t.equals(java.lang.Boolean.TYPE)) {
-          targetField.setBoolean(target, f.getBoolean(source));
-        } else if (t.equals(java.lang.Character.TYPE)) {
-          targetField.setChar(target, f.getChar(source));
-        } else if (t.equals(java.lang.Byte.TYPE)) {
-          targetField.setByte(target, f.getByte(source));
-        } else if (t.equals(java.lang.Short.TYPE)) {
-          targetField.setShort(target, f.getShort(source));
-        } else if (t.equals(java.lang.Integer.TYPE)) {
-          targetField.setInt(target, f.getInt(source));
-        } else if (t.equals(java.lang.Long.TYPE)) {
-          targetField.setLong(target, f.getLong(source));
-        } else if (t.equals(java.lang.Float.TYPE)) {
-          targetField.setFloat(target, f.getFloat(source));
-        } else if (t.equals(java.lang.Double.TYPE)) {
-          targetField.setDouble(target, f.getDouble(source));
-        } else {
-          // log.debug(String.format("setting reference to remote
-          // object %s", f.getName()));
-          targetField.set(target, f.get(source));
-        }
-      } catch (Exception e) {
-        log.error("copy failed", e);
-      }
+    // if we are a org.myrobotlab object climb up the ancestry to
+    // copy all super-type fields ...
+    // GroG says: I wasn't comfortable copying of "Service" - because its never
+    // been tested before - so we copy all definitions from
+    // other superclasses e.g. - org.myrobotlab.service.abstracts
+    // it might be safe in the future to copy all the way up without stopping...
+    while (targetClass.getCanonicalName().startsWith("org.myrobotlab") && !targetClass.getCanonicalName().startsWith("org.myrobotlab.framework")) {
+      ancestry.add(targetClass);
+      targetClass = targetClass.getSuperclass();
     }
+
+    for (Class<?> sourceClass : ancestry) {
+
+      Field fields[] = sourceClass.getDeclaredFields();
+      for (int j = 0, m = fields.length; j < m; j++) {
+        try {
+          Field f = fields[j];
+
+          int modifiers = f.getModifiers();
+
+          // if (Modifier.isPublic(mod)
+          // !(Modifier.isPublic(f.getModifiers())
+          // Hmmm JSON mappers do hacks to get by
+          // IllegalAccessExceptions.... Hmmmmm
+
+          // GROG - recent change from this
+          // if ((!Modifier.isPublic(modifiers)
+          // to this
+          String fname = f.getName();
+          /*
+           * if (fname.equals("desktops") || fname.equals("useLocalResources")
+           * ){ log.info("here"); }
+           */
+
+          if (Modifier.isPrivate(modifiers) || fname.equals("log") || Modifier.isTransient(modifiers) || Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+            log.debug("skipping {}", f.getName());
+            continue;
+          } else {
+            log.debug("copying {}", f.getName());
+          }
+          Type t = f.getType();
+
+          // log.info(String.format("setting %s", f.getName()));
+          /*
+           * if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+           * continue; }
+           */
+
+          // GroG - this is new 1/26/2017 - needed to get webgui data to
+          // load
+          f.setAccessible(true);
+          Field targetField = sourceClass.getDeclaredField(f.getName());
+          targetField.setAccessible(true);
+
+          if (t.equals(java.lang.Boolean.TYPE)) {
+            targetField.setBoolean(target, f.getBoolean(source));
+          } else if (t.equals(java.lang.Character.TYPE)) {
+            targetField.setChar(target, f.getChar(source));
+          } else if (t.equals(java.lang.Byte.TYPE)) {
+            targetField.setByte(target, f.getByte(source));
+          } else if (t.equals(java.lang.Short.TYPE)) {
+            targetField.setShort(target, f.getShort(source));
+          } else if (t.equals(java.lang.Integer.TYPE)) {
+            targetField.setInt(target, f.getInt(source));
+          } else if (t.equals(java.lang.Long.TYPE)) {
+            targetField.setLong(target, f.getLong(source));
+          } else if (t.equals(java.lang.Float.TYPE)) {
+            targetField.setFloat(target, f.getFloat(source));
+          } else if (t.equals(java.lang.Double.TYPE)) {
+            targetField.setDouble(target, f.getDouble(source));
+          } else {
+            // log.debug(String.format("setting reference to remote
+            // object %s", f.getName()));
+            targetField.set(target, f.get(source));
+          }
+        } catch (Exception e) {
+          log.error("copy failed", e);
+        }
+      } // for each field in class
+    } // for each in ancestry
     return target;
   }
 
@@ -483,19 +510,15 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * @return true if successfully created
    */
   static public ServiceInterface createRootReserved(String key) {
-    log.info(String.format("createReserved %s ", key));
+    log.info("createReserved {}", key);
     ServiceReservation node = dnaPool.get(key);
     if (node != null) {
       ServiceReservation r = dnaPool.get(key);
       return Runtime.create(r.actualName, r.fullTypeName);
     }
 
-    log.error(String.format("createRootReserved can not create %s", key));
+    log.error("createRootReserved can not create %s", key);
     return null;
-  }
-
-  public static String getCfgDir() {
-    return cfgDir;
   }
 
   static public TreeMap<String, ServiceReservation> getDna() {
@@ -544,8 +567,11 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * - from which it will be accessible for create methods
    * 
    * template merge with existing dna
-   * @param myKey the key
-   * @param className the class name
+   * 
+   * @param myKey
+   *          the key
+   * @param className
+   *          the class name
    */
   public void mergePeerDna(String myKey, String className) {
     if (serviceType != null) {
@@ -593,7 +619,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
               actualName = String.format("%s.%s", myKey, template.actualName);
             }
 
-            sr = new ServiceReservation(fullKey, actualName, template.fullTypeName, template.comment, template.isRoot);
+            sr = new ServiceReservation(fullKey, actualName, template.fullTypeName, template.comment, template.isRoot, template.autoStart);
 
             // we have to recursively move things if we moved a root
             // of some complex peer (the root and all its branches)
@@ -622,10 +648,15 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   /**
    * a method to recursively move all peer children of this server
-   * @param myKey key
-   * @param actualName name 
-   * @param fullTypeName  full 
-   * @param comment a comment
+   * 
+   * @param myKey
+   *          key
+   * @param actualName
+   *          name
+   * @param fullTypeName
+   *          full
+   * @param comment
+   *          a comment
    */
   public void movePeerDna(String myKey, String actualName, String fullTypeName, String comment) {
     ServiceType meta = getMetaData(fullTypeName);
@@ -651,9 +682,13 @@ public abstract class Service extends MessageService implements Runnable, Serial
   /**
    * Reserves a name for a root level Service. allows modifications to the
    * reservation map at the highest level
-   * @param key the key
-   * @param simpleTypeName the type 
-   * @param comment a comment
+   * 
+   * @param key
+   *          the key
+   * @param simpleTypeName
+   *          the type
+   * @param comment
+   *          a comment
    */
   static public void reserveRoot(String key, String simpleTypeName, String comment) {
     // strip delimeter out if put in by key
@@ -662,18 +697,25 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   static public void reserveRoot(String key, String actualName, String simpleTypeName, String comment) {
-    log.info(String.format("reserved key %s -> %s %s %s", key, actualName, simpleTypeName, comment));
+    log.info("reserved key {} -> {} {} {}", key, actualName, simpleTypeName, comment);
     dnaPool.put(key, new ServiceReservation(key, actualName, simpleTypeName, comment));
   }
 
   /**
    * basic useful reset of a peer before service is created
-   * @param peerName name
-   * @param peerType type
+   * 
+   * @param peerName
+   *          name
+   * @param peerType
+   *          type
    */
   public void setPeer(String peerName, String peerType) {
     String fullKey = String.format("%s.%s", getName(), peerName);
-    ServiceReservation sr = new ServiceReservation(fullKey, peerName, peerType, null);
+    // ServiceReservation sr = new ServiceReservation(fullKey, peerName,
+    // peerType, null);
+    ServiceReservation sr = new ServiceReservation(fullKey, fullKey, peerType, null); // CHANGED
+                                                                                      // -
+                                                                                      // 01/24/20
     dnaPool.put(fullKey, sr);
   }
 
@@ -703,22 +745,31 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return true;
   }
 
-  public static boolean setSecurityProvider(AuthorizationProvider provider) {
-    if (security != null) {
+  public boolean setSecurityProvider(AuthorizationProvider provider) {
+    if (authProvider != null) {
       log.error("security provider is already set - it can not be unset .. THAT IS THE LAW !!!");
       return false;
     }
 
-    security = provider;
+    authProvider = provider;
     return true;
   }
 
   /**
    * sleep without the throw
-   * @param millis the time in milliseconds
+   * 
+   * @param millis
+   *          the time in milliseconds
    * 
    */
   public static void sleep(int millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+    }
+  }
+
+  public static void sleep(long millis) {
     try {
       Thread.sleep(millis);
     } catch (InterruptedException e) {
@@ -737,19 +788,153 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return "------\r\n" + sw.toString() + "------\r\n";
   }
 
-  // FIXME - make a static initialization part !!!
+  public String getRootDataDir() {
+    return Runtime.getOptions().dataDir;
+  }
 
-  public Service(String reservedKey) {
-    super(reservedKey);
+  public String getHomeDir() {
+    return System.getProperty("user.home");
+  }
 
+  static public String getDataDir(String typeName) {
+    String dataDir = Runtime.getOptions().dataDir + fs + typeName;
+    File f = new File(dataDir);
+    if (!f.exists()) {
+      f.mkdirs();
+    }
+    return Runtime.getOptions().dataDir + fs + typeName;
+  }
+
+  public String getDataDir() {
+    return getDataDir(getClass().getSimpleName());
+  }
+
+  public String getDataInstanceDir() {
+    String dataDir = Runtime.getOptions().dataDir + fs + getClass().getSimpleName() + fs + getName();
+    File f = new File(dataDir);
+    if (!f.exists()) {
+      f.mkdirs();
+    }
+    return Runtime.getOptions().dataDir + fs + getClass().getSimpleName() + fs + getName();
+  }
+
+  /**
+   * All resource access should be using this method.
+   * Util.getResource... should be deprecated.
+   * This should be the one source which determines the location
+   * and resolves the priority of setting this configuration
+   * @return
+   */
+  static public String getResourceRoot() {
+    // FIXME - should "this" be the test ?
+    // If so it should be its own static function...
+
+    // order of precedence
+    // 1. if there is a src directory use it unless
+    // 2. options say to override it
+
+    String resourceRoot = (Runtime.getOptions() != null)?Runtime.getOptions().resourceDir:"resource";
+    if ("resource".equals(resourceRoot)) {
+      // allow default to be overriden by src if it exists
+      File src = new File("src");
+      if (src.exists()) {        
+        resourceRoot = "src" + fs + "main" + fs + "resources" + fs + "resource";
+      }
+    }
+
+    return resourceRoot;
+  }
+
+  public String getResourceDir() {
+    return getResourceDir(getClass().getSimpleName());
+  }
+  
+  /**
+   * list of resources for this service top level
+   * @return
+   */
+  public File[] getResourceDirList() {
+    String resDir = getResourceDir();
+    File f = new File(resDir);
+    return f.listFiles();
+  }
+
+  static public String getResourceDir(Class<?> clazz) {
+    return getResourceDir(clazz.getSimpleName());
+  }
+
+  static public String getResourceDir(String serviceType) {
+    String resourceDir = getResourceRoot() + fs + serviceType;
+    if (resourceOverrides.containsKey(serviceType)) {
+    	resourceDir = resourceOverrides.get(serviceType);
+    }
+    return resourceDir;
+  }
+
+  public byte[] getResource(String resourceName) {
+    String filename = getResourceDir() + fs + resourceName;
+    File f = new File(filename);
+    if (!f.exists()) {
+      error("resource %s does not exist", f);
+      return null;
+    }
+    byte[] content = null;
+    try {
+      content = Files.readAllBytes(Paths.get(filename));
+    } catch (IOException e) {
+      error(e);
+    }
+    return content;
+  }
+
+  public String getResourceAsString(String resourceName) {
+    byte[] data = getResource(resourceName);
+    if (data != null) {
+      try {
+        return new String(data, "UTF-8");
+      } catch (Exception e) {
+        log.error("getResourceAsString threw", e);
+      }
+    }
+    return null;
+  }
+
+  public String getResourceInstanceDir() {
+    String dataDir = Runtime.getOptions().resourceDir + fs + getClass().getSimpleName() + fs + getName();
+    File f = new File(dataDir);
+    if (!f.exists()) {
+      f.mkdirs();
+    }
+    return Runtime.getOptions().resourceDir + fs + getClass().getSimpleName() + fs + getName();
+  }
+
+  /**
+   * Constructor of service, reservedkey typically is a services name and inId
+   * will be its process id
+   * 
+   * @param reservedKey
+   * @param inId
+   */
+  public Service(String reservedKey, String inId) {
+    // necessary for serialized transport\
+    if (inId == null) {
+      id = Platform.getLocalInstance().getId();
+      log.info("creating local service for id {}", id);
+    } else {
+      id = inId;
+      log.info("creating remote proxy service for id {}", id);
+    }
+    
+    
     serviceClass = this.getClass().getCanonicalName();
     simpleName = this.getClass().getSimpleName();
+    MethodCache cache = MethodCache.getInstance();
+    cache.cacheMethodEntries(this.getClass());
 
-    // xxx
-    try {// FIXME !!! AFTER MERGE !!!
+    try {
       serviceType = getMetaData(this.getClass().getCanonicalName());
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("could not extract meta data for {}", this.getClass().getCanonicalName());
     }
 
     // FIXME - this is 'sort-of' static :P
@@ -776,27 +961,63 @@ public abstract class Service extends MessageService implements Runnable, Serial
     // see if incoming key is my "actual" name
     ServiceReservation sr = dnaPool.get(reservedKey);
     if (sr != null) {
-      log.info(String.format("found reservation exchanging reservedKey %s for actual name %s", reservedKey, sr.actualName));
+      log.debug("found reservation exchanging reservedKey {} for actual name {}", reservedKey, sr.actualName);
       name = sr.actualName;
     } else {
       name = reservedKey;
     }
-    // keep MessageService name in sync
 
-    // this.timer = new Timer(String.format("%s_timer", name)); FIXME -
-    // re-implement but only create if there is a task!!
-    this.inbox = new Inbox(name);
+    this.inbox = new Inbox(getFullName());
     this.outbox = new Outbox(this);
-    cm = new CommunicationManager(name);
-    this.outbox.setCommunicationManager(cm);
+    
+    File versionFile = new File(getResourceDir() + fs + "version.txt");
+    if (versionFile.exists()) {
+    	try {
+    		String version = FileIO.toString(versionFile);
+	    	if (version != null) {
+	    		version = version.trim();
+	    		serviceVersion = version;
+	    	}
+    	} catch(Exception e) {/* don't care */}
+    }
 
-    tsFormatter.setCalendar(cal);
-    load();
-    Runtime.register(this, null);
+    // register this service if local - if we are a foreign service, we probably
+    // are being created in a
+    // registration already
+    if (id.equals(Platform.getLocalInstance().getId())) {
+      Registration registration = new Registration(this);
+      Runtime.register(registration);
+    }
+
+  }
+
+  /**
+   * new overload - mqtt uses this for json encoded MrlListener to process
+   * subscriptions
+   * 
+   * @param data
+   *          - listener callback info
+   */
+  public void addListener(Map data) {
+    // {topicMethod=pulse, callbackName=mqtt01, callbackMethod=onPulse}
+    if (!data.containsKey("topicMethod")) {
+      error("addListener topicMethod missing");
+    }
+    if (!data.containsKey("callbackName")) {
+      error("addListener callbackName missing");
+    }
+    if (!data.containsKey("callbackMethod")) {
+      error("addListener callbackMethod missing");
+    }
+    addListener(data.get("topicMethod").toString(), data.get("callbackName").toString(), data.get("callbackMethod").toString());
   }
 
   public void addListener(MRLListener listener) {
     addListener(listener.topicMethod, listener.callbackName, listener.callbackMethod);
+  }
+
+  public void addListener(String topicMethod, String callbackName) {
+    addListener(topicMethod, callbackName, CodecUtils.getCallbackTopicName(topicMethod));
   }
 
   /**
@@ -814,59 +1035,75 @@ public abstract class Service extends MessageService implements Runnable, Serial
    */
   public void addListener(String topicMethod, String callbackName, String callbackMethod) {
     MRLListener listener = new MRLListener(topicMethod, callbackName, callbackMethod);
-    if (outbox.notifyList.containsKey(listener.topicMethod.toString())) {
+    if (outbox.notifyList.containsKey(listener.topicMethod)) {
       // iterate through all looking for duplicate
       boolean found = false;
-      ArrayList<MRLListener> nes = outbox.notifyList.get(listener.topicMethod.toString());
+      ArrayList<MRLListener> nes = outbox.notifyList.get(listener.topicMethod);
       for (int i = 0; i < nes.size(); ++i) {
         MRLListener entry = nes.get(i);
         if (entry.equals(listener)) {
-          log.debug(String.format("attempting to add duplicate MRLListener %s", listener));
+          log.debug("attempting to add duplicate MRLListener {}", listener);
           found = true;
           break;
         }
       }
       if (!found) {
-        log.debug(String.format("adding addListener from %s.%s to %s.%s", this.getName(), listener.topicMethod, listener.callbackName, listener.callbackMethod));
+        log.debug("adding addListener from {}.{} to {}.{}", this.getName(), listener.topicMethod, listener.callbackName, listener.callbackMethod);
         nes.add(listener);
       }
     } else {
       ArrayList<MRLListener> notifyList = new ArrayList<MRLListener>();
       notifyList.add(listener);
-      log.debug(String.format("adding addListener from %s.%s to %s.%s", this.getName(), listener.topicMethod, listener.callbackName, listener.callbackMethod));
-      outbox.notifyList.put(listener.topicMethod.toString(), notifyList);
+      log.debug("adding addListener from {}.{} to {}.{}", this.getName(), listener.topicMethod, listener.callbackName, listener.callbackMethod);
+      outbox.notifyList.put(listener.topicMethod, notifyList);
     }
   }
 
-  public void addTask(int intervalMs, String method) {
+  public boolean hasSubscribed(String listener, String topicMethod) {
+    ArrayList<MRLListener> nes = outbox.notifyList.get(topicMethod);
+    for (MRLListener ne : nes) {
+      if (ne.callbackName.contentEquals(listener)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public void addTask(long intervalMs, String method) {
     addTask(intervalMs, method, new Object[] {});
   }
 
-  public void addTask(int intervalMs, String method, Object... params) {
+  public void addTask(long intervalMs, String method, Object... params) {
     addTask(method, intervalMs, 0, method, params);
   }
 
-  public void addTaskOneShot(int delay, String method, Object... params) {
-    addTask(method, 0, delay, method, params);
+  public void addTaskOneShot(long delayMs, String method, Object... params) {
+    addTask(method, 0, delayMs, method, params);
   }
 
   /**
    * a stronger bigger better task handler !
-   * @param taskName task name
-   * @param intervalMs how frequent in milliseconds
-   * @param delay the delay 
-   * @param method the method
-   * @param params the params to pass
+   * 
+   * @param taskName
+   *          task name
+   * @param intervalMs
+   *          how frequent in milliseconds
+   * @param delayMs
+   *          the delay
+   * @param method
+   *          the method
+   * @param params
+   *          the params to pass
    */
-  public void addTask(String taskName, int intervalMs, int delay, String method, Object... params) {
+  synchronized public void addTask(String taskName, long intervalMs, long delayMs, String method, Object... params) {
     if (tasks.containsKey(taskName)) {
-      log.warn(String.format("already have active task \"%s\"", taskName));
+      log.info("already have active task \"{}\"", taskName);
       return;
     }
     Timer timer = new Timer(String.format("%s.timer", String.format("%s.%s", getName(), taskName)));
-    Message msg = Message.createMessage(this, getName(), method, params);
+    Message msg = Message.createMessage(getName(), getName(), method, params);
     Task task = new Task(this, taskName, intervalMs, msg);
-    timer.schedule(task, delay);
+    timer.schedule(task, delayMs);
     tasks.put(taskName, timer);
   }
 
@@ -878,7 +1115,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return tasks.containsKey(taskName);
   }
 
-  public void purgeTask(String taskName) {
+  synchronized public void purgeTask(String taskName) {
     if (tasks.containsKey(taskName)) {
       log.info("remove task {}", taskName);
       Timer timer = tasks.get(taskName);
@@ -893,7 +1130,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
         }
       }
     } else {
-      log.warn("purgeTask - task {} does not exist", taskName);
+      log.debug("purgeTask - task {} does not exist", taskName);
     }
   }
 
@@ -902,10 +1139,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
       Timer timer = tasks.get(taskName);
       if (timer != null) {
         try {
-          timer.cancel();
           timer.purge();
+          timer.cancel();
           timer = null;
-          tasks.remove(taskName);
         } catch (Exception e) {
           log.info(e.getMessage());
         }
@@ -914,19 +1150,35 @@ public abstract class Service extends MessageService implements Runnable, Serial
     tasks.clear();
   }
 
-  public boolean allowDisplay() {
-    return allowDisplay;
-  }
-
-  public void allowDisplay(Boolean b) {
-    allowDisplay = b;
-  }
-
-  // new state functions begin --------------------------
+  @Override
   public void broadcastState() {
     invoke("publishState");
   }
 
+  @Override
+  public void broadcastStatus(Status status) {
+    long now = System.currentTimeMillis();
+    if (status.equals(lastStatus) && now - lastStatusTs < statusBroadcastLimitMs) {
+      return;
+    }
+    if (status.name == null) {
+      status.name = getName();
+    }
+    if (status.level.equals(StatusLevel.ERROR)) {
+      lastError = status;
+      lastErrorTs = now;
+      log.error(status.toString());
+      invoke("publishError", status);
+    } else {
+      log.info(status.toString());
+    }
+
+    invoke("publishStatus", status);
+    lastStatusTs = now;
+    lastStatus = status;
+  }
+
+  @Override
   public String clearLastError() {
     String le = lastError.toString();
     lastError = null;
@@ -957,14 +1209,10 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * 
    * FIXME - if not local - it needs to be prefixed by the gateway e.g.
    * {remote}.arduino.serial
-   * @param reservedKey r
+   * 
+   * @param reservedKey
+   *          r
    * @return service interface
-   */
-  /*
-   * public String getPeerName(String key){ if
-   * (!serviceType.peers.containsKey(key)){ return null; } else {
-   * ServiceReservation sr = serviceType.peers.get(key); // TODO !isLocal(){
-   * return gw.getPrefix() + actualName return sr.actualName; } }
    */
 
   public synchronized ServiceInterface createPeer(String reservedKey) {
@@ -996,7 +1244,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * 
    * This method will update the registry, additionally it will block until the
    * refresh response comes back
-   * @param pulse p
+   * 
+   * @param pulse
+   *          p
    * @return a heartbeat
    */
 
@@ -1004,16 +1254,12 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return pulse;
   }
 
-  public CommunicationInterface getComm() {
-    return cm;
-  }
-
   @Override
   public String[] getDeclaredMethodNames() {
     Method[] methods = getDeclaredMethods();
     String[] ret = new String[methods.length];
 
-    log.info(String.format("getDeclaredMethodNames loading %d non-sub-routable methods", methods.length));
+    log.info("getDeclaredMethodNames loading {} non-sub-routable methods", methods.length);
     for (int i = 0; i < methods.length; ++i) {
       ret[i] = methods[i].getName();
     }
@@ -1039,6 +1285,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return name;
   }
 
+  @Override
   public Status getLastError() {
     return lastError;
   }
@@ -1047,7 +1294,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
   public Set<String> getMessageSet() {
     Set<String> ret = new TreeSet<String>();
     Method[] methods = getMethods();
-    log.info(String.format("getMessageSet loading %d non-sub-routable methods", methods.length));
+    log.debug("getMessageSet loading {} non-sub-routable methods", methods.length);
     for (int i = 0; i < methods.length; ++i) {
       ret.add(methods[i].getName());
     }
@@ -1063,7 +1310,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
      */
     String[] ret = new String[methods.length];
 
-    log.info(String.format("getMethodNames loading %d non-sub-routable methods", methods.length));
+    log.info("getMethodNames loading {} non-sub-routable methods", methods.length);
     for (int i = 0; i < methods.length; ++i) {
       ret[i] = methods[i].getName();
     }
@@ -1139,25 +1386,6 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return Peers.getPeerKey(getName(), key);
   }
 
-  /**
-   * a default way to attach Services to other Services An example would be
-   * attaching a Motor to a MotorControl or a Speaking service (TTS) to a
-   * Listening service (STT) such that when the system is speaking it does not
-   * try to listen &amp; act on its own speech (feedback loop)
-   * 
-   * FIXME - the SwingGui currently has attachGUI() and detachGUI() - these are
-   * to bind Services with their swing views/tab panels. It should be
-   * generalized to this attach method
-   * @param subpath s
-   * 
-   * @return if successful
-   * 
-   */
-
-  public String getServiceResourceFile(String subpath) {
-    return FileIO.resourceToString(String.format("%s/%s", this.getSimpleName(), subpath));
-  }
-
   @Override
   public String getSimpleName() {
     return simpleName;
@@ -1172,33 +1400,10 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return getClass().getCanonicalName();
   }
 
+  @Override
   public boolean hasError() {
     return lastError != null;
   }
-
-  // TODO Clock example - roles
-  // no - security (internal) Role - default access - ALLOW
-  // WebGui - public - no security header - default access DISALLOW +
-  // exception
-  // WebGui (remote in genera) - user / group ALLOW
-
-  /*
-   * private boolean hasAccess(Message msg) { // turn into single key ??? //
-   * type.name.method
-   * 
-   * // check this type <-- not sure i want to support this
-   * 
-   * // check this name &amp; method // if any access limitations exist which might
-   * be applicable if (accessRules.containsKey(msg.name) ||
-   * accessRules.containsKey(String.format("%s.%s", msg.name, msg.method))) { //
-   * restricted service - check for authorization // Security service only
-   * provides authorization ? if (security == null) { return false; } else {
-   * return security.isAuthorized(msg); }
-   * 
-   * }
-   * 
-   * // invoke - SecurityException - log error return false; }
-   */
 
   @Override
   public boolean hasPeers() {
@@ -1206,14 +1411,10 @@ public abstract class Service extends MessageService implements Runnable, Serial
       Class<?> theClass = Class.forName(serviceClass);
       Method method = theClass.getMethod("getPeers", String.class);
     } catch (Exception e) {
-      log.debug(String.format("%s does not have a getPeers", serviceClass));
+      log.debug("{} does not have a getPeers", serviceClass);
       return false;
     }
     return true;
-  }
-
-  public String help() {
-    return help("url", "declared");
   }
 
   public String help(String format, String level) {
@@ -1247,8 +1448,6 @@ public abstract class Service extends MessageService implements Runnable, Serial
     inbox.add(msg);
   }
 
-  // BOXING - BEGIN --------------------------------------
-
   /**
    * This is where all messages are routed to and processed
    */
@@ -1257,7 +1456,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
     Object retobj = null;
 
     if (log.isDebugEnabled()) {
-      log.debug(String.format("--invoking %s.%s(%s) %s --", name, msg.method, CodecUtils.getParameterSignature(msg.data), msg.msgId));
+      log.debug("--invoking {}.{}({}) {} --", name, msg.method, CodecUtils.getParameterSignature(msg.data), msg.msgId);
     }
 
     // recently added - to support "nameless" messages - concept you may get
@@ -1267,33 +1466,13 @@ public abstract class Service extends MessageService implements Runnable, Serial
     // this is to support nameless Runtime messages but theoretically it
     // could
     // happen in other situations...
-    if (!name.equals(msg.name)) {
+    if (Runtime.getInstance().isLocal(msg) && !name.equals(msg.getName())) {
       // wrong Service - get the correct one
-      return Runtime.getService(msg.name).invoke(msg);
+      return Runtime.getService(msg.getName()).invoke(msg);
     }
 
-    // SECURITY -
-    // 0. allowing export - whether or not we'll allow services to be
-    // exported - based on Type or Name
-    // 1. we have firewall like rules where we can add inclusion and
-    // exclusion rules - based on Type or Name - Service Level - Method
-    // Level
-    // 2. authentication & authorization
-    // 3. transport mechanism (needs implementation on each type of remote
-    // Communicator e.g. Xmpp RemoteAdapter WebGui etc...)
-
-    // check for access
-    // if access FAILS ! - check for authenticated access
-    // not needed "centrally" - instead will impement in Communicators
-    // which hand foriegn connections
-    // if (security == null || security.isAuthorized(msg)) {
-
-    // "local" invoke - you have a "real" reference
     retobj = invokeOn(this, msg.method, msg.data);
-    // }
 
-    // retobject will be returned as another
-    // message
     return retobj;
   }
 
@@ -1308,122 +1487,48 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   /**
+   * thread blocking invoke call on different service in the same process
+   * 
+   * @param serviceName
+   * @param methodName
+   * @param params
+   * @return
+   */
+  final public Object invokeOn(String serviceName, String methodName, Object... params) {
+    return invokeOn(Runtime.getService(serviceName), methodName, params);
+  }
+
+  /**
    * the core working invoke method
    * 
-   * @param obj - the object
-   * @param method - the method to invoke on that object
-   * @param params - the list of args to pass to the method
+   * @param obj
+   *          - the object
+   * @param methodName
+   *          - the method to invoke on that object
+   * @param params
+   *          - the list of args to pass to the method
    * @return return object
    */
   @Override
-  final public Object invokeOn(Object obj, String method, Object... params) {
-
-    if (obj == null) {
-      log.error("invokeOn object is null");
-      return null;
-    }
-
+  final public Object invokeOn(Object obj, String methodName, Object... params) {
     Object retobj = null;
-    Class<?> c = null;
-    Class<?>[] paramTypes = null;
-
     try {
-      c = obj.getClass();
-
-      if (params != null) {
-        paramTypes = new Class[params.length];
-        for (int i = 0; i < params.length; ++i) {
-          if (params[i] != null) {
-            paramTypes[i] = params[i].getClass();
-          } else {
-            paramTypes[i] = null;
-          }
-        }
+      MethodCache cache = MethodCache.getInstance();
+      if (obj == null) {
+        log.error("cannot invoke on a null object ! {}({})", methodName, MethodCache.formatParams(params));
+        return null;
       }
-      Method meth = null;
-
-      // TODO - method cache map
-      // can not auto-box or downcast with this method - getMethod will
-      // return a "specific & exact" match based
-      // on parameter types - the thing is we may have a typed signature
-      // which will allow execution - but
-      // if so we need to search
-      
-      // FIXME - WHY ISN'T METHOD CACHING USED HERE !!!
-
-      // SECURITY - ??? can't be implemented here - need a full message
-      meth = c.getMethod(method, paramTypes); // getDeclaredMethod zod !!!
-      retobj = meth.invoke(obj, params);
-
-      // put return object onEvent
-      out(method, retobj);
-    } catch (NoSuchMethodException e) {
-
-      // cache key compute
-
-      // TODO: validate what "params.toString()" returns.
-      StringBuilder keyBuilder = new StringBuilder();
-      if (paramTypes != null) {
-        for (Object o : paramTypes) {
-          keyBuilder.append(o);
-        }
+      Method method = cache.getMethod(obj.getClass(), methodName, params);
+      if (method == null) {
+        error("could not find method %s.%s(%s)", obj.getClass().getSimpleName(), methodName, MethodCache.formatParams(params));
+        return null; // should this be allowed to throw to a higher level ?
       }
-
-      Method mC = LRUMethodCache.getInstance().getCacheEntry(obj, method, paramTypes);
-      if (mC != null) {
-        // We found a cached hit! lets invoke on that.
-        try {
-          retobj = mC.invoke(obj, params);
-          // put return object onEvent
-          out(method, retobj);
-          // return
-          return retobj;
-        } catch (Exception e1) {
-          log.error(String.format("boom goes method %s", mC.getName()));
-          Logging.logError(e1);
-        }
-
-      }
-
-      // TODO - build method cache map from errors
-      log.info(String.format("no such method %s.%s - attempting upcasting", c.getSimpleName(), MethodEntry.getPrettySignature(method, paramTypes, null)));
-
-      // TODO - optimize with a paramter TypeConverter & Map
-      // c.getMethod - returns on EXACT match - not "Working" match
-      Method[] allMethods = c.getMethods(); // ouch
-      log.info(String.format("searching through %d methods", allMethods.length));
-
-      for (Method m : allMethods) {
-        String mname = m.getName();
-        if (!mname.equals(method)) {
-          continue;
-        }
-
-        Type[] pType = m.getGenericParameterTypes();
-        // checking parameter lengths
-        if (params == null && pType.length != 0 || pType.length != params.length) {
-          continue;
-        }
-        try {
-          log.debug("found appropriate method");
-          retobj = m.invoke(obj, params);
-          // put return object onEvent
-          out(method, retobj);
-          // we've found a match. put that in the cache.
-          log.debug("caching method cache key");
-          LRUMethodCache.getInstance().addCacheEntry(obj, method, paramTypes, m);
-          return retobj;
-        } catch (Exception e1) {
-          log.error(String.format("boom goes method %s", m.getName()));
-          Logging.logError(e1);
-        }
-      }
-
-      log.error(String.format("did not find method - %s(%s)", method, CodecUtils.getParameterSignature(params)));
+      retobj = method.invoke(obj, params);
+      out(methodName, retobj);
     } catch (Exception e) {
-      log.error(String.format("%s", e.getClass().getSimpleName()), e);
+      error("could not invoke %s.%s (%s) - check logs for details", getName(), methodName, params);
+      log.error("could not invoke {}.{} ({})", getName(), methodName, params, e);
     }
-
     return retobj;
   }
 
@@ -1437,10 +1542,19 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return Runtime.class == this.getClass();
   }
 
+  @Override
   public boolean isReady() {
-    return true;
+    return ready;
   }
 
+  protected void setReady(Boolean ready) {
+    if (!ready.equals(this.ready)) {
+      this.ready = ready;
+      broadcastState();
+    }
+  }
+
+  @Override
   public boolean isRunning() {
     return isRunning;
   }
@@ -1456,26 +1570,49 @@ public abstract class Service extends MessageService implements Runnable, Serial
   public boolean load(Object o, String inCfgFileName) {
     String filename = null;
     if (inCfgFileName == null) {
-      filename = String.format("%s%s%s.json", cfgDir, File.separator, this.getName());
+      filename = String.format("%s%s%s.json", FileIO.getCfgDir(), fs, String.format("%s-%s", getClass().getSimpleName(), getName()));
     } else {
       filename = inCfgFileName;
     }
+
+    File cfg = new File(filename);
+    if (cfg.exists()) {
+      try {
+        String json = FileIO.toString(filename);
+        if (!loadFromJson(o, json)) {
+          log.info("could not load file {}", filename);
+        } else {
+          return true;
+        }
+      } catch (Exception e) {
+        log.error("load threw", e);
+      }
+    } else {
+      log.info("cfg file {} does not exist", filename);
+    }
+    return false;
+  }
+
+  @Override
+  public boolean loadFromJson(String json) {
+    return loadFromJson(this, json);
+  }
+
+  public boolean loadFromJson(Object o, String json) {
+
     if (o == null) {
       o = this;
     }
 
     try {
-      File cfg = new File(filename);
-      if (cfg.exists()) {
-        // serializer.read(o, cfg);
-        String json = FileIO.toString(filename);
-        Object saved = CodecUtils.fromJson(json, o.getClass());
-        copyShallowFrom(o, saved);
-        return true;
-      }
-      log.info(String.format("cfg file %s does not exist", filename));
+
+      Object saved = CodecUtils.fromJson(json, o.getClass());
+      copyShallowFrom(o, saved);
+      broadcastState();
+      return true;
+
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("failed loading {}", e);
     }
     return false;
   }
@@ -1491,18 +1628,15 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * of the driver - only that it wants to method="write" data to the driver
    */
   public void out(String method, Object o) {
-    Message m = Message.createMessage(this, null, method, o); // create a
-                                                              // un-named
-                                                              // message
-    // as output
+    Message m = Message.createMessage(getFullName(), null, method, o);
 
     if (m.sender.length() == 0) {
-      m.sender = this.getName();
+      m.sender = this.getFullName();
     }
     if (m.sendingMethod.length() == 0) {
       m.sendingMethod = method;
     }
-    if (outbox == null){
+    if (outbox == null) {
       log.info("******************OUTBOX IS NULL*************************");
       return;
     }
@@ -1522,7 +1656,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
   /**
    * framework diagnostic publishing method for examining load, capacity, and
    * throughput of Inbox &amp; Outbox queues
-   * @param stats s
+   * 
+   * @param stats
+   *          s
    * @return the stats
    */
   public QueueStats publishQueueStats(QueueStats stats) {
@@ -1531,6 +1667,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   /**
    * publishing point for the whole service the entire Service is published
+   * 
    * @return the service
    */
   public Service publishState() {
@@ -1549,49 +1686,65 @@ public abstract class Service extends MessageService implements Runnable, Serial
    */
   @Override
   public void releasePeers() {
-    log.info(String.format("dna - %s", dnaPool.toString()));
+    releasePeers(null);
+  }
+
+  // FIXME - startPeers sets fields - this method should "unset" fieldss !!!
+  synchronized private void releasePeers(String peerName) {
+    log.info("dna - {}", dnaPool.toString());
     String myKey = getName();
-    log.info(String.format("releasePeers (%s, %s)", myKey, serviceClass));
+    log.info("releasePeers ({}, {})", myKey, serviceClass);
     try {
       // TODO: what the heck does this thing do?
       Class<?> theClass = Class.forName(serviceClass);
       Method method = theClass.getMethod("getMetaData");
       ServiceType serviceType = (ServiceType) method.invoke(null);
       Map<String, ServiceReservation> peers = serviceType.getPeers();
-      // FIXME - recursively release peers
+      for (String s : peers.keySet()) {
+        if (peerName == null) {
+          Runtime.release(getPeerKey(s));
+        } else if (peerName != null && peerName.equals(s))
+          Runtime.release(getPeerKey(s));
+      }
 
     } catch (Exception e) {
-      log.debug(String.format("%s does not have a getPeers", serviceClass));
+      log.debug("{} does not have a getPeers", serviceClass);
     }
+  }
+
+  public void releasePeer(String peerName) {
+    releasePeers(peerName);
   }
 
   /**
    * Releases resources, and unregisters service from the runtime
    */
   @Override
-  public void releaseService() {
-    
-    // recently added - preference over detach(Runtime.getService(getName()));
-    // since this service is releasing - it should be detached from all existing services
-    detach();
-    
-    // note - if stopService is overwritten with extra
-    // threads - releaseService will need to be overwritten too
-    stopService();
-    
-    // TODO ? detach all other services currently attached
-    // detach();
-    // @grog is it ok for now ?
-    
-    // GroG says, I don't think so - this is releasing itself from itself 
-    // detach(Runtime.getService(getName()));
-
-    // FIXME - deprecate - peers are no longer used ...
-    releasePeers();
+  synchronized public void releaseService() {
 
     purgeTasks();
 
-    Runtime.release(getName());
+    // recently added - preference over detach(Runtime.getService(getName()));
+    // since this service is releasing - it should be detached from all existing
+    // services
+    detach();
+
+    // note - if stopService is overwritten with extra
+    // threads - releaseService will need to be overwritten too
+    stopService();
+
+    // TODO ? detach all other services currently attached
+    // detach();
+    // @grog is it ok for now ?
+
+    // GroG says, I don't think so - this is releasing itself from itself
+    // detach(Runtime.getService(getName()));
+
+    releasePeers();
+
+    // Runtime.release(getName()); infinite loop with peers ! :(
+
+    Runtime.unregister(getName());
   }
 
   /**
@@ -1599,6 +1752,10 @@ public abstract class Service extends MessageService implements Runnable, Serial
    */
   public void removeAllListeners() {
     outbox.notifyList.clear();
+  }
+
+  public void removeListener(String topicMethod, String callbackName) {
+    removeListener(topicMethod, callbackName, CodecUtils.getCallbackTopicName(topicMethod));
   }
 
   @Override
@@ -1609,11 +1766,11 @@ public abstract class Service extends MessageService implements Runnable, Serial
         MRLListener target = nel.get(i);
         if (target.callbackName.compareTo(serviceName) == 0) {
           nel.remove(i);
-          log.info(String.format("removeListener requested %s.%s to be removed", serviceName, outMethod));
+          log.info("removeListener requested {}.{} to be removed", serviceName, outMethod);
         }
       }
     } else {
-      log.error(String.format("removeListener requested %s.%s to be removed - but does not exist", serviceName, outMethod));
+      log.info("removeListener requested {}.{} to be removed - but does not exist", serviceName, outMethod);
     }
   }
 
@@ -1621,7 +1778,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   @Override
   public boolean requiresSecurity() {
-    return security != null;
+    return authProvider != null;
   }
 
   /**
@@ -1664,12 +1821,12 @@ public abstract class Service extends MessageService implements Runnable, Serial
         }
 
         // nameless Runtime messages
-        if (m.name == null) {
+        if (m.getName() == null) {
           // don't know if this is "correct"
           // but we are substituting the Runtime name as soon as we
           // see that its a null
           // name message
-          m.name = Runtime.getInstance().getName();
+          m.setName(Runtime.getInstance().getFullName());
         }
 
         // route if necessary
@@ -1691,8 +1848,8 @@ public abstract class Service extends MessageService implements Runnable, Serial
           // TODO should this declaration be outside the while loop?
           // create new message reverse sender and name set to same
           // msg id
-          Message msg = Message.createMessage(this, m.sender, m.method, ret);
-          msg.sender = this.getName();
+          Message msg = Message.createMessage(getName(), m.sender, m.method, ret);
+          msg.sender = this.getFullName();
           msg.msgId = m.msgId;
           // msg.status = Message.BLOCKING;
           msg.status = Message.RETURN;
@@ -1714,21 +1871,21 @@ public abstract class Service extends MessageService implements Runnable, Serial
   public boolean save() {
 
     try {
-      File cfg = new File(String.format("%s%s%s.json", cfgDir, File.separator, getName()));
+      File cfg = new File(String.format("%s%s%s.json", FileIO.getCfgDir(), fs, String.format("%s-%s", getClass().getSimpleName(), getName())));
       // serializer.write(this, cfg);
-      info("saving %s", cfg.getName());
-
+      // this is a spammy log message
+      // info("saving %s", cfg.getName());
       if (this instanceof Runtime) {
-        info("we cant serialize runtime yet");
+        // info("we cant serialize runtime yet");
         return false;
       }
 
-      String s = CodecUtils.toJson(this);
+      String s = CodecUtils.toPrettyJson(this);
       FileOutputStream out = new FileOutputStream(cfg);
       out.write(s.getBytes());
       out.close();
     } catch (Exception e) {
-      Logging.logError(e);
+      log.error("save threw", e);
       return false;
     }
     return true;
@@ -1737,7 +1894,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
   public boolean save(Object o, String cfgFileName) {
 
     try {
-      File cfg = new File(String.format("%s%s%s", cfgDir, File.separator, cfgFileName));
+      File cfg = new File(String.format("%s%s%s", FileIO.getCfgDir(), fs, cfgFileName));
       String s = CodecUtils.toJson(o);
       FileOutputStream out = new FileOutputStream(cfg);
       out.write(s.getBytes());
@@ -1749,11 +1906,15 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return true;
   }
 
+  public ServiceInterface getPeer(String peerName) {
+    return Runtime.getService(String.format("%s.%s", getName(), peerName));
+  }
+
   public boolean save(String cfgFileName, String data) {
     // saves user data in the .myrobotlab directory
     // with the file naming convention of name.<cfgFileName>
     try {
-      FileIO.toFile(String.format("%s%s%s.%s", cfgDir, File.separator, this.getName(), cfgFileName), data);
+      FileIO.toFile(String.format("%s%s%s.%s", FileIO.getCfgDir(), fs, this.getName(), cfgFileName), data);
     } catch (Exception e) {
       Logging.logError(e);
       return false;
@@ -1761,76 +1922,78 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return true;
   }
 
-  /**
-   * 0?
-   */
   public void send(String name, String method) {
     send(name, method, (Object[]) null);
   }
 
+  public void sendToPeer(String peerName, String method) {
+    send(String.format("%s.%s", name, peerName), method, (Object[]) null);
+  }
+  
+  public Object invokePeer(String peerName, String method) {
+    return invokeOn(getPeer(peerName), method, (Object[])null);
+  }
+
+
+  public Object invokePeer(String peerName, String method, Object...data) {
+    return invokeOn(getPeer(peerName), method, data);
+  }
+
+
+  public void sendToPeer(String peerName, String method, Object... data) {
+    send(String.format("%s.%s", name, peerName), method, data);
+  }
+
   public void send(String name, String method, Object... data) {
-    Message msg = Message.createMessage(this, name, method, data);
-    msg.sender = this.getName();
+    Message msg = Message.createMessage(getName(), name, method, data);
+    msg.sender = this.getFullName();
     // All methods which are invoked will
     // get the correct sendingMethod
     // here its hardcoded
     msg.sendingMethod = "send";
+    // log.info(CodecUtils.toJson(msg));
     send(msg);
   }
-  
-  public void send(Message msg){
-    if (recorder != null) {
-      try {
-        recorder.write(msg);
-      } catch (IOException e) {
-        log.error("recording failed", e);
-      }
-    }
+
+  public void send(Message msg) {
     outbox.add(msg);
   }
 
-  /**
-   * this send forces remote connect - for registering services
-   * @param url u
-   * @param method m 
-   * @param param1 the param
-   */
-  public void send(URI url, String method, Object param1) {
-    Object[] params = new Object[1];
-    params[0] = param1;
-    Message msg = Message.createMessage(this, name, method, params);
-    outbox.getCommunicationManager().send(url, msg);
-  }
-
   public Object sendBlocking(String name, Integer timeout, String method, Object... data) {
-    Message msg = Message.createMessage(this, name, method, data);
-    msg.sender = this.getName();
+    Message msg = Message.createMessage(getName(), name, method, data);
+    msg.sender = this.getFullName();
     msg.status = Message.BLOCKING;
     msg.msgId = Runtime.getUniqueID();
-    
+
     return sendBlocking(msg, timeout);
   }
-  
+
+  /**
+   * In theory the only reason this should need to use synchronized wait/notify
+   * is when the msg destination is in another remote process. sendBlocking
+   * should either invoke directly or use a gateway's sendBlockingRemote. To use
+   * a gateways sendBlockingRemote - the msg must have a remote src
+   * 
+   * <pre>
+   * after attach:
+   * stdin (remote) --&gt; gateway sendBlockingRemote --&gt; invoke
+   *                &lt;--                            &lt;--
+   * </pre>
+   */
   public Object sendBlocking(Message msg, Integer timeout) {
-    Object[] returnContainer = new Object[1];
-    /*
-     * if (inbox.blockingList.contains(msg.msgID)) { log.error("DUPLICATE"); }
-     */
-    inbox.blockingList.put(msg.msgId, returnContainer);
-
-    try {
-      // block until message comes back
-      synchronized (returnContainer) {
-        outbox.add(msg);
-        returnContainer.wait(timeout); // NEW !!! TIMEOUT !!!!
+    if (Runtime.getInstance().isLocal(msg)) {
+      return invoke(msg);
+    } else {
+      // get gateway for remote address
+      Gateway gateway = Runtime.getInstance().getGatway(msg.getId());
+      try {
+        return gateway.sendBlockingRemote(msg, timeout);
+      } catch (Exception e) {
+        log.error("gateway.sendBlockingRemote threw");
       }
-    } catch (InterruptedException e) {
-      log.error("interrupted", e);
     }
-
-    return returnContainer[0];
+    return null;
   }
-  
 
   // BOXING - End --------------------------------------
   public Object sendBlocking(String name, String method) {
@@ -1839,7 +2002,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   public Object sendBlocking(String name, String method, Object... data) {
     // default 1 second timeout - FIXME CONFIGURABLE
-    return sendBlocking(name, 1000, method, data); 
+    return sendBlocking(name, 1000, method, data);
   }
 
   @Override
@@ -1871,10 +2034,6 @@ public abstract class Service extends MessageService implements Runnable, Serial
     this.thisThread = thisThread;
   }
 
-  public void startHeartbeat() {
-    // getComm().
-  }
-
   public ServiceInterface startPeer(String reservedKey) {
     ServiceInterface si = null;
     try {
@@ -1887,7 +2046,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
       si.startService();
     } catch (Exception e) {
       error(e.getMessage());
-      Logging.logError(e);
+      log.error("startPeer threw", e);
     }
     return si;
   }
@@ -1902,16 +2061,26 @@ public abstract class Service extends MessageService implements Runnable, Serial
     return si;
   }
 
-  public void startRecording() {
-    invoke("startRecording", new Object[] { null });
+  @Override
+  public void loadAndStart() {
+    load();
+    startService();
   }
 
   @Override
-  public void startService() {
-    ServiceInterface si = Runtime.getService(name);
-    if (si == null) {
-      Runtime.create(name, getSimpleName());
-    }
+  synchronized public void startService() {
+    // register locally
+    /*
+     * had to register here for synchronization issues before ... Registration
+     * registration = new Registration(this); Runtime.register(registration);
+     */
+
+    // startPeers(); FIXME - TOO BIG A CHANGE .. what should happen is services
+    // should be created
+    // currently they are started by the UI vs created - and there is no desire
+    // or current capability of starting it
+    // afterwards
+
     if (!isRunning()) {
       outbox.start();
       if (thisThread == null) {
@@ -1924,17 +2093,83 @@ public abstract class Service extends MessageService implements Runnable, Serial
     }
   }
 
-  public void stopHeartbeat() {
-  }
+  public void startPeers() {
+    log.info("starting peers");
+    Map<String, ServiceReservation> peers = null;
 
-  public void stopMsgRecording() {
-    log.info("stopped recording");
-    if (recorder != null) {
-      try {
-        recorder.stop();
-      } catch (Exception e) {
-        Logging.logError(e);
-      }
+    try {
+      Method method = this.getClass().getMethod("getMetaData");
+      ServiceType st = (ServiceType) method.invoke(null);
+      peers = st.getPeers();
+    } catch (Exception e) {
+    }
+
+    if (peers == null) {
+      return;
+    }
+
+    Set<Class<?>> ancestry = new HashSet<Class<?>>();
+    Class<?> targetClass = this.getClass();
+
+    // if we are a org.myrobotlab object climb up the ancestry to
+    // copy all super-type fields ...
+    // GroG says: I wasn't comfortable copying of "Service" - because its never
+    // been tested before - so we copy all definitions from
+    // other superclasses e.g. - org.myrobotlab.service.abstracts
+    // it might be safe in the future to copy all the way up without stopping...
+    while (targetClass.getCanonicalName().startsWith("org.myrobotlab") && !targetClass.getCanonicalName().startsWith("org.myrobotlab.framework")) {
+      ancestry.add(targetClass);
+      targetClass = targetClass.getSuperclass();
+    }
+
+    for (Class<?> sourceClass : ancestry) {
+
+      Field fields[] = sourceClass.getDeclaredFields();
+      for (int j = 0, m = fields.length; j < m; j++) {
+        try {
+          Field f = fields[j];
+
+          /**
+           * <pre>
+           * int modifiers = f.getModifiers();
+           * String fname = f.getName();
+           * if (Modifier.isPrivate(modifiers) || fname.equals("log") || Modifier.isTransient(modifiers) || Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+           *   log.debug("skipping {}", f.getName());
+           *   continue;
+           * } else {
+           *   log.debug("copying {}", f.getName());
+           * }
+           * 
+           * Type t = f.getType();
+           * </pre>
+           */
+
+          f.setAccessible(true);
+          Field targetField = sourceClass.getDeclaredField(f.getName());
+          targetField.setAccessible(true);
+
+          if (peers.containsKey(f.getName())) {
+            ServiceReservation sr = peers.get(f.getName());
+
+            if (sr.autoStart == null || sr.autoStart == false) {
+              log.info("peer defined - but configured to not autoStart");
+              continue;
+            }
+
+            if (f.get(this) != null) {
+              log.info("peer {} already assigned", f.getName());
+              continue;
+            }
+            log.info("assinging {}.{} = startPeer({})", sourceClass.getSimpleName(), f.getName(), f.getName());
+            Object o = startPeer(f.getName());
+
+            targetField.set(this, o);
+          }
+
+        } catch (Exception e) {
+          log.error("copy failed", e);
+        }
+      } // for each field in class
     }
   }
 
@@ -1942,87 +2177,132 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * Stops the service. Stops threads.
    */
   @Override
-  public void stopService() {
+  synchronized public void stopService() {
     isRunning = false;
     outbox.stop();
     if (thisThread != null) {
       thisThread.interrupt();
     }
     thisThread = null;
-    save();
+    // save(); removed by GroG
   }
 
   // -------------- Messaging Begins -----------------------
   public void subscribe(NameProvider topicName, String topicMethod) {
-    String callbackMethod = CodecUtils.getCallBackName(topicMethod);
+    String callbackMethod = CodecUtils.getCallbackTopicName(topicMethod);
     subscribe(topicName.getName(), topicMethod, getName(), callbackMethod);
   }
 
   public void subscribe(String topicName, String topicMethod) {
-    String callbackMethod = CodecUtils.getCallBackName(topicMethod);
+    String callbackMethod = CodecUtils.getCallbackTopicName(topicMethod);
     subscribe(topicName, topicMethod, getName(), callbackMethod);
   }
 
+  public void subscribeTo(String service, String method) {
+    subscribe(service, method, getName(), CodecUtils.getCallbackTopicName(method));
+  }
+
+  public void subscribeToRuntime(String method) {
+    subscribe(Runtime.getInstance().getName(), method, getName(), CodecUtils.getCallbackTopicName(method));
+  }
+
+  public void unsubscribeTo(String service, String method) {
+    unsubscribe(service, method, getName(), CodecUtils.getCallbackTopicName(method));
+  }
+
+  public void unsubscribeToRuntime(String method) {
+    unsubscribe(Runtime.getInstance().getName(), method, getName(), CodecUtils.getCallbackTopicName(method));
+  }
+
   public void subscribe(String topicName, String topicMethod, String callbackName, String callbackMethod) {
-    log.info(String.format("subscribe [%s/%s ---> %s/%s]", topicName, topicMethod, callbackName, callbackMethod));
-    MRLListener listener = new MRLListener(topicMethod, callbackName, callbackMethod);
-    cm.send(Message.createMessage(this, topicName, "addListener", listener));
+    log.info("subscribe [{}/{} ---> {}/{}]", topicName, topicMethod, callbackName, callbackMethod);
+    // TODO - do regex matching
+    if (topicName.contains("*")) { // FIXME "any regex expression
+      List<String> tnames = Runtime.getServiceNames(topicName);
+      for (String serviceName : tnames) {
+        MRLListener listener = new MRLListener(topicMethod, callbackName, callbackMethod);
+        send(Message.createMessage(getName(), serviceName, "addListener", listener));
+      }
+    } else {
+      if (topicMethod.contains("*")) { // FIXME "any regex expression
+        Set<String> tnames = Runtime.getMethodMap(topicName).keySet();
+        for (String method : tnames) {
+          MRLListener listener = new MRLListener(method, callbackName, callbackMethod);
+          send(Message.createMessage(getName(), topicName, "addListener", listener));
+        }
+      } else {
+        MRLListener listener = new MRLListener(topicMethod, callbackName, callbackMethod);
+        send(Message.createMessage(getName(), topicName, "addListener", listener));
+      }
+    }
   }
 
   public void sendPeer(String peerKey, String method, Object... params) {
-    cm.send(Message.createMessage(this, getPeerName(peerKey), method, params));
+    send(Message.createMessage(getName(), getPeerName(peerKey), method, params));
   }
 
   public void unsubscribe(NameProvider topicName, String topicMethod) {
-    String callbackMethod = CodecUtils.getCallBackName(topicMethod);
+    String callbackMethod = CodecUtils.getCallbackTopicName(topicMethod);
     unsubscribe(topicName.getName(), topicMethod, getName(), callbackMethod);
   }
 
   public void unsubscribe(String topicName, String topicMethod) {
-    String callbackMethod = CodecUtils.getCallBackName(topicMethod);
+    String callbackMethod = CodecUtils.getCallbackTopicName(topicMethod);
     unsubscribe(topicName, topicMethod, getName(), callbackMethod);
   }
 
   public void unsubscribe(String topicName, String topicMethod, String callbackName, String callbackMethod) {
-    log.info(String.format("unsubscribe [%s/%s ---> %s/%s]", topicName, topicMethod, callbackName, callbackMethod));
-    cm.send(Message.createMessage(this, topicName, "removeListener", new Object[] { topicMethod, callbackName, callbackMethod }));
+    log.info("unsubscribe [{}/{} ---> {}/{}]", topicName, topicMethod, callbackName, callbackMethod);
+    send(Message.createMessage(getName(), topicName, "removeListener", new Object[] { topicMethod, callbackName, callbackMethod }));
   }
 
   // -------------- Messaging Ends -----------------------
   // ---------------- Status processing begin ------------------
   public Status error(Exception e) {
+    log.error("status:", e);
     Status ret = Status.error(e);
     ret.name = getName();
+    log.error(ret.toString());
     invoke("publishStatus", ret);
     return ret;
   }
 
   @Override
   public Status error(String format, Object... args) {
-    Status ret = Status.error(String.format(format, args));
+    Status ret = null;
+    if (format != null) {
+      ret = Status.error(String.format(format, args));
+    } else {
+      ret = Status.error(String.format("", args));
+    }
     ret.name = getName();
+    log.error(ret.toString());
     invoke("publishStatus", ret);
     return ret;
   }
 
-  public Status error(String msg) {    
-    return error(msg, (Object[])null);
+  public Status error(String msg) {
+    return error(msg, (Object[]) null);
   }
 
-  public Status warn(String msg) {        
-    return warn(msg, (Object[])null);
+  public Status warn(String msg) {
+    return warn(msg, (Object[]) null);
   }
 
   @Override
   public Status warn(String format, Object... args) {
-    Status status =  Status.warn(format, args);
+    Status status = Status.warn(format, args);
+    status.name = getName();
+    log.warn(status.toString());
     invoke("publishStatus", status);
     return status;
   }
 
   /**
    * set status broadcasts an info string to any subscribers
-   * @param msg m
+   * 
+   * @param msg
+   *          m
    * @return string
    */
   public Status info(String msg) {
@@ -2035,6 +2315,8 @@ public abstract class Service extends MessageService implements Runnable, Serial
   @Override
   public Status info(String format, Object... args) {
     Status status = Status.info(format, args);
+    status.name = getName();
+    log.info(status.toString());
     invoke("publishStatus", status);
     return status;
   }
@@ -2042,7 +2324,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
   /**
    * error only channel publishing point versus publishStatus which handles
    * info, warn &amp; error
-   * @param status status
+   * 
+   * @param status
+   *          status
    * @return the status
    */
   public Status publishError(Status status) {
@@ -2050,18 +2334,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   public Status publishStatus(Status status) {
-    status.name = getName();
-    if (status.level.equals(StatusLevel.ERROR)) {
-      lastError = status;
-      log.error(status.toString());
-      invoke("publishError", status);
-    } else {
-      log.info(status.toString());
-    }
     return status;
   }
 
-  // ---------------- Status processing end ------------------
   @Override
   public String toString() {
     return getName();
@@ -2107,7 +2382,9 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * Calls the static method getMetaData on the appropriate class. The class
    * static data is passed back as a template to be merged in with the global
    * static dna
-   * @param serviceClass sc
+   * 
+   * @param serviceClass
+   *          sc
    * @return the service type info
    */
   static public ServiceType getMetaData(String serviceClass) {
@@ -2137,24 +2414,30 @@ public abstract class Service extends MessageService implements Runnable, Serial
 
   public String getDescription() {
     String description = getMetaData(getClass().getSimpleName()).getDescription();
-    //return getMetaData("Arduino").getDescription();
     return description;
   }
 
   /**
    * Attachable.detach(serviceName) - routes to reference parameter
    * Attachable.detach(Attachable)
+   * 
+   * FIXME - the "string" attach/detach(string) method should be in the
+   * implementation.. and this abstract should implement the
+   * attach/detach(Attachable) .. because if a string was used as the base
+   * implementation - it would always work when serialized (and not registered)
+   * 
    */
   public void detach(String serviceName) {
     detach(Runtime.getService(serviceName));
   }
-  
+
   /**
    * detaches ALL other services from this service
    */
-  public void detach(){
+  public void detach() {
     log.info("detach was called but I'm a NOOP in Service.java - probably not what you wanted - override me !");
-    // FIXME - attach should probably have a Service.java level of understanding where a Service understands
+    // FIXME - attach should probably have a Service.java level of understanding
+    // where a Service understands
     // that another service is attached
   }
 
@@ -2165,14 +2448,14 @@ public abstract class Service extends MessageService implements Runnable, Serial
   public void attach(String serviceName) throws Exception {
     attach(Runtime.getService(serviceName));
   }
-  
-  public boolean isAttached(String serviceName){
+
+  public boolean isAttached(String serviceName) {
     return isAttached(Runtime.getService(serviceName));
   }
 
   /**
-   * This detach when overriden "routes" to the appropriately typed parameterized
-   * detach within a service.
+   * This detach when overriden "routes" to the appropriately typed
+   * parameterized detach within a service.
    * 
    * When overriden, the first thing it should do is check to see if the
    * referenced service is already detached. If it is already detached it should
@@ -2208,7 +2491,7 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * 
    *       // call to detaching service
    *       service.detach(this);  
-   * }  
+   * }
    * </pre>
    * 
    * @param service
@@ -2219,8 +2502,8 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   /**
-   * the "routing" isAttached - when overridden by a service this
-   * "routes" to the appropriate typed isAttached
+   * the "routing" isAttached - when overridden by a service this "routes" to
+   * the appropriate typed isAttached
    */
   @Override
   public boolean isAttached(Attachable instance) {
@@ -2236,8 +2519,8 @@ public abstract class Service extends MessageService implements Runnable, Serial
   }
 
   /**
-   * This attach when overriden "routes" to the appropriately typed parameterized
-   * attach within a service.
+   * This attach when overriden "routes" to the appropriately typed
+   * parameterized attach within a service.
    * 
    * When overriden, the first thing it should do is check to see if the
    * referenced service is already attached. If it is already attached it should
@@ -2273,22 +2556,137 @@ public abstract class Service extends MessageService implements Runnable, Serial
    * 
    *       // call to attaching service
    *       service.attach(this);  
-   * }  
+   * }
    * </pre>
    * 
    * @param service
    *          - the service to attach from this service
    */
   @Override
-  public void attach(Attachable service) throws Exception { 
-    log.info("Service.attach does not know how to attach {} to a {}", service.getClass().getSimpleName(), this.getClass().getSimpleName());
+  public void attach(Attachable service) throws Exception {
+    info(String.format("Service.attach does not know how to attach %s to a %s", service.getClass().getSimpleName(), this.getClass().getSimpleName()));
   }
-  
-  public void setVirtual(boolean b) {
+
+  public boolean setVirtual(boolean b) {
     this.isVirtual = b;
-  }
-  
-  public boolean isVirtual(){
     return isVirtual;
   }
+
+  public boolean isVirtual() {
+    return isVirtual;
+  }
+
+  /**
+   * a convenience method for a Service which always attempts to find a file
+   * with the same ordered precedence
+   * 
+   * 1. check data/{ServiceType} first (users data directory) 2. check
+   * resource/{ServiceType} (mrl's static resource directory) 3. check absolute
+   * path
+   * 
+   * @param filename
+   *          - file name to get
+   * @return the file to returned or null if does not exist
+   */
+  public File getFile(String filename) {
+    File file = new File(getDataDir() + fs + filename);
+    if (file.exists()) {
+      log.info("found file in data directory - {}", file.getAbsolutePath());
+      return file;
+    }
+    file = new File(getResourceDir() + fs + filename);
+    if (file.exists()) {
+      log.info("found file in resource directory - {}", file.getAbsolutePath());
+      return file;
+    }
+
+    file = new File(filename);
+
+    if (file.exists()) {
+      log.info("found file - {}", file.getAbsolutePath());
+      return file;
+    }
+
+    error("could not find file {}", file.getAbsolutePath());
+    return file;
+  }
+
+  /**
+   * Called by Runtime when system is shutting down a service can use this
+   * method when it has to do some "ordered" cleanup.
+   */
+  public void preShutdown() {
+  }
+
+  /**
+   * determines if current process has internet access - moved to Service
+   * recently because it may become Service specific
+   * 
+   * @return - true if internet is available
+   */
+  public static boolean hasInternet() {
+    return Runtime.getPublicGateway() != null;
+  }
+
+  /**
+   * true when no display is available - moved from Runtime to Service because
+   * it may become Service specific
+   * 
+   * @return - true when no display is available
+   */
+  static public boolean isHeadless() {
+    return java.awt.GraphicsEnvironment.isHeadless();
+  }
+
+  public void setOrder(int creationCount) {
+    this.creationOrder = creationCount;
+  }
+
+  @Deprecated
+  public String getSwagger() {
+    return null;
+  }
+
+  public String getId() {
+    return id;
+  }
+
+  public String getFullName() {
+    return String.format("%s@%s", name, id);
+  }
+
+  public void copyResource(String src, String dest) throws IOException {
+    FileIO.copy(getResourceDir() + File.separator + src, dest);
+  }
+
+  public void setId(String id) {
+    this.id = id;
+  }
+
+  public String export() throws IOException {
+    // FIXME - interaction with user if file exists ?
+    String filename = getRootDataDir() + fs + getName() + ".py";
+    return export(getDataDir() + fs + getName() + ".py", getName());
+  }
+
+  public String exportAll() throws IOException {
+    // FIXME - interaction with user if file exists ?
+    return exportAll(getRootDataDir() + fs + "export.py");
+  }
+
+  public String export(String filename, String names) throws IOException {
+    String python = LangUtils.toPython(names);
+    Files.write(Paths.get(filename), python.toString().getBytes());
+    info("saved %s to %s", getName(), filename);
+    return python;
+  }
+
+  public String exportAll(String filename) throws IOException {
+    // currently only support python - maybe in future we'll support js too
+    String python = LangUtils.toPython();
+    Files.write(Paths.get(filename), python.toString().getBytes());
+    info("saved %s to %s", getName(), filename);
+    return python;
+  }
+
 }

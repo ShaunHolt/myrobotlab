@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -41,6 +41,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
 import org.myrobotlab.image.SerializableImage;
+import org.myrobotlab.image.Util;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.service.IpCamera;
 import org.myrobotlab.service.Runtime;
@@ -55,40 +56,40 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
     public void actionPerformed(ActionEvent ae) {
       log.info("{}", ae);
       if ("n".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
       } else if ("listener".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
       } else if ("e".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
       } else if ("se".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_LEFT);
       } else if ("s".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
       } else if ("sw".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_DOWN);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
       } else if ("w".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
       } else if ("nw".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_UP);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_RIGHT);
       } else if ("stop".equals(ae.getActionCommand())) {
-        myService.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_STOP_RIGHT);
+        swingGui.send(boundServiceName, "move", IpCamera.FOSCAM_MOVE_STOP_RIGHT);
         // myService.send(boundServiceName, "move",
         // IPCamera.FOSCAM_MOVE_CENTER);
       } else if ("connect".equals(ae.getActionCommand())) {
         // host.getText(), user.getText(), password.getText()
-        myService.send(boundServiceName, "connectVideoStream", videoURL.getText());
+        swingGui.send(boundServiceName, "connectVideoStream", videoURL.getText());
       } else if ("capture".equals(ae.getActionCommand())) {
         JButton b = (JButton) ae.getSource();
         if ("stop capture".equals(b.getText())) {
           b.setText("capture");
-          myService.send(boundServiceName, "stopCapture");
+          swingGui.send(boundServiceName, "stopCapture");
         } else {
           b.setText("stop capture");
-          myService.send(boundServiceName, "capture");
+          swingGui.send(boundServiceName, "capture");
         }
       }
     }
@@ -107,7 +108,7 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
 
     @Override
     public void keyPressed(KeyEvent keyEvent) {
-      myService.send(boundServiceName, "keyPressed", keyEvent.getKeyCode());
+      swingGui.send(boundServiceName, "keyPressed", keyEvent.getKeyCode());
     }
 
     @Override
@@ -155,7 +156,6 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
     myIPCamera = (IpCamera) Runtime.getService(boundServiceName);
     direction.setDirectionListener(dirEventListener);
 
-
     display.setLayout(new BorderLayout());
 
     video0 = new VideoWidget(boundServiceName, myService);
@@ -172,9 +172,9 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
     display.add(config, BorderLayout.SOUTH);
 
     // connected = new JLabel(new
-    // ImageIcon(IPCameraGUI.class.getResource("/resource/bullet_ball_glass_green.png")));
+    // ImageIcon(IPCameraGUI.class.getResource(Util.getRessourceDir() +"/bullet_ball_glass_green.png")));
     // notConnected = new JLabel(new
-    // ImageIcon(IPCameraGUI.class.getResource("/resource/bullet_ball_glass_grey.png")));
+    // ImageIcon(IPCameraGUI.class.getResource(Util.getRessourceDir() +"/bullet_ball_glass_grey.png")));
     // display.add(notConnected, gc);
     // display.add(connected, gc);
     // connected.setVisible(false);
@@ -191,7 +191,7 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
     /*
      * ++gc.gridy; display.add(capture, gc); ++gc.gridy; display.add(info, gc);
      */
-  
+
   }
 
   @Override
@@ -201,14 +201,12 @@ public class IpCameraGui extends ServiceGui implements ListSelectionListener {
     subscribe("publishDisplay");
   };
 
-
   @Override
   public void unsubscribeGui() {
     video0.unsubscribeGui();
     unsubscribe("setEnableControls");
     unsubscribe("publishDisplay");
   }
-
 
   /*
    * JUST STREAM THE #*%(%(*# VIDEO ! The return of IPCamera.getStatus which is

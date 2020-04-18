@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exzception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -39,20 +39,22 @@ package org.myrobotlab.service;
 import java.io.File;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 import org.apache.commons.lang.StringUtils;
+import org.myrobotlab.framework.Message;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
+import org.myrobotlab.image.Util;
 import org.myrobotlab.io.FileIO;
 import org.myrobotlab.logging.Level;
 import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.Logging;
 import org.myrobotlab.logging.LoggingFactory;
 import org.myrobotlab.service.abstracts.AbstractSpeechRecognizer;
-import org.myrobotlab.service.interfaces.SpeechRecognizer;
+import org.myrobotlab.service.data.Locale;
 import org.myrobotlab.service.interfaces.SpeechSynthesis;
 import org.myrobotlab.service.interfaces.TextListener;
-import org.myrobotlab.service.interfaces.TextPublisher;
 import org.slf4j.Logger;
 
 import edu.cmu.sphinx.frontend.util.Microphone;
@@ -66,24 +68,9 @@ import edu.cmu.sphinx.util.props.ConfigurationManager;
  * what it's listening for. It does not do free-form speech recognition.
  * 
  */
+@Deprecated /* we need another offline solution - one that doesn't suck */
 public class Sphinx extends AbstractSpeechRecognizer {
 
-  /**
-   * Commands must be created "before" startListening startListening will create
-   * a grammar file from the data
-   *
-   */
-  public class Command {
-    public String name;
-    public String method;
-    public Object[] params;
-
-    Command(String name, String method, Object[] params) {
-      this.name = name;
-      this.method = method;
-      this.params = params;
-    }
-  }
 
   class SpeechProcessor extends Thread {
     Sphinx myService = null;
@@ -102,7 +89,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
         info(String.format("starting speech processor thread %s_ear", myService.getName()));
 
-        String newPath = cfgDir + File.separator + myService.getName() + ".xml";
+        String newPath = FileIO.getCfgDir() + File.separator + myService.getName() + ".xml";
         File localGramFile = new File(newPath);
 
         info("loading grammar file");
@@ -112,7 +99,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
         } else {
           // resource in jar default
           info(String.format("grammar /resource/Sphinx/simple.xml"));
-          cm = new ConfigurationManager(this.getClass().getResource("/resource/Sphinx/simple.xml"));
+          cm = new ConfigurationManager(this.getClass().getResource(Util.getResourceDir() + "/Sphinx/simple.xml"));
         }
 
         info("starting recognizer");
@@ -132,7 +119,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
         while (isRunning) {
 
           info("listening: %b", isListening);
-          invoke("listeningEvent",true);
+          invoke("listeningEvent", true);
           Result result = recognizer.recognize();
 
           if (!isListening) {
@@ -153,7 +140,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
             log.info("recognized: " + resultText + '\n');
             if (resultText.length() > 0 && isListening) {
               if (lockPhrases.size() > 0 && !lockPhrases.contains(resultText) && !confirmations.containsKey(resultText)) {
-                log.info(String.format("but locked on %s", resultText));
+                log.info("but locked on {}", resultText);
                 continue;
               }
 
@@ -163,7 +150,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
                 if (currentCommand != null && (confirmations == null || confirmations.containsKey(resultText))) {
                   // i have a command and a confirmation
                   // command sent
-                  send(currentCommand.name, currentCommand.method, currentCommand.params);
+                  send(currentCommand);
                   // command finished
                   currentCommand = null;
                   invoke("publishText", "ok");
@@ -181,11 +168,11 @@ public class Sphinx extends AbstractSpeechRecognizer {
                   if (bypass != null && bypass.containsKey(resultText)) {
                     // we have confirmation and/or negations
                     // - but we also have a bypass
-                    send(currentCommand.name, currentCommand.method, currentCommand.params);
+                    send(currentCommand);
                   } else {
                     // setting new potential command - using
                     // either confirmations or negations
-                    Command cmd = commands.get(resultText);
+                    Message cmd = commands.get(resultText);
                     currentCommand = cmd;
                     invoke("publishRequestConfirmation", resultText);
                     // continue in the loop, we should stop listening, and we
@@ -196,8 +183,8 @@ public class Sphinx extends AbstractSpeechRecognizer {
                 } else if (commands.containsKey(resultText)) {
                   // no confirmations or negations are being
                   // used - just send command
-                  Command cmd = commands.get(resultText);
-                  send(cmd.name, cmd.method, cmd.params);
+                  Message cmd = commands.get(resultText);
+                  send(cmd);
                 } else {
                   error(String.format("unknown use case for Sphinx commands - word is %s", resultText));
                   // we don't know what this command was.. just continue.. we
@@ -236,24 +223,22 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
   transient SpeechProcessor speechProcessor = null;
 
-  private boolean isListening = false;
-  // private String lockPhrase = null;
   HashSet<String> lockPhrases = new HashSet<String>();
-  HashMap<String, Command> commands = null;
-  HashMap<String, Command> confirmations = null;
+  
+  HashMap<String, Message> confirmations = null;
 
-  HashMap<String, Command> negations = null;
+  HashMap<String, Message> negations = null;
 
-  HashMap<String, Command> bypass = null;
+  HashMap<String, Message> bypass = null;
 
-  Command currentCommand = null;
+  Message currentCommand = null;
 
   public static void main(String[] args) {
 
     LoggingFactory.init(Level.DEBUG);
     try {
-      Sphinx ear = (Sphinx) Runtime.createAndStart("ear", "Sphinx");
-      SpeechSynthesis speech = new MarySpeech("speech");
+      Sphinx ear = (Sphinx) Runtime.start("ear", "Sphinx");
+      SpeechSynthesis speech = (MarySpeech)Runtime.start("speech", "MarySpeech");
       ((MarySpeech) speech).startService();
 
       // attache speech to ear -
@@ -296,15 +281,15 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
   }
 
-  public Sphinx(String n) {
-    super(n);
+  public Sphinx(String n, String id) {
+    super(n, id);
   }
 
   public void addBypass(String... txt) {
     if (bypass == null) {
-      bypass = new HashMap<String, Command>();
+      bypass = new HashMap<String, Message>();
     }
-    Command bypassCommand = new Command(this.getName(), "bypass", null);
+    Message bypassCommand = Message.createMessage(getName(), getName(), "bypass", null);
 
     for (int i = 0; i < txt.length; ++i) {
       bypass.put(txt[i], bypassCommand);
@@ -313,28 +298,20 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
   public void addComfirmations(String... txt) {
     if (confirmations == null) {
-      confirmations = new HashMap<String, Command>();
+      confirmations = new HashMap<String, Message>();
     }
-    Command confirmCommand = new Command(this.getName(), "confirmation", null);
+    Message confirmCommand = Message.createMessage(getName(), getName(), "confirmation", null);
 
     for (int i = 0; i < txt.length; ++i) {
       confirmations.put(txt[i], confirmCommand);
     }
   }
 
-  // TODO - should this be in Service ?????
-  public void addCommand(String actionPhrase, String name, String method, Object... params) {
-    if (commands == null) {
-      commands = new HashMap<String, Command>();
-    }
-    commands.put(actionPhrase, new Command(name, method, params));
-  }
-
   public void addNegations(String... txt) {
     if (negations == null) {
-      negations = new HashMap<String, Command>();
+      negations = new HashMap<String, Message>();
     }
-    Command negationCommand = new Command(this.getName(), "negation", null);
+    Message negationCommand = Message.createMessage(getName(), getName(), "negation", null);
 
     for (int i = 0; i < txt.length; ++i) {
       negations.put(txt[i], negationCommand);
@@ -367,7 +344,7 @@ public class Sphinx extends AbstractSpeechRecognizer {
   // return true;
   // }
 
-  public void buildGrammar(StringBuffer sb, HashMap<String, Command> cmds) {
+  public void buildGrammar(StringBuffer sb, HashMap<String, Message> cmds) {
     if (cmds != null) {
       if (sb.length() > 0) {
         sb.append("|");
@@ -399,8 +376,8 @@ public class Sphinx extends AbstractSpeechRecognizer {
    * example: Sphinx.createGrammar ("ear", "stop | go | left | right | back");
    * ear = Runtime.create("ear", "Sphinx")
    * 
-   * param filename
-   *          - name of the Service which will be utilizing this grammar
+   * param filename - name of the Service which will be utilizing this grammar
+   * 
    * @param grammar
    *          - grammar content
    * @return true/false
@@ -410,12 +387,12 @@ public class Sphinx extends AbstractSpeechRecognizer {
     // FIXME - probably broken
     // get base simple.xml file - and modify it to
     // point to the correct .gram file
-    String simplexml = getServiceResourceFile("simple.xml");
+    String simplexml = getResourceAsString("simple.xml");
     // String grammarLocation = "file://" + cfgDir.replaceAll("\\\\", "/") +
     // "/";
     // simplexml = simplexml.replaceAll("resource:/resource/",
     // cfgDir.replaceAll("\\\\", "/"));
-    simplexml = simplexml.replaceAll("resource:/resource/", ".myrobotlab");
+    simplexml = simplexml.replaceAll("resource:/resource/", FileIO.getCfgDir());
 
     // a filename like i01.ear.gram (without the gram extention of course
     // because is sucks this out of the xml"
@@ -428,11 +405,11 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
     simplexml = simplexml.replaceAll("name=\"grammarName\" value=\"simple\"", "name=\"grammarName\" value=\"" + grammarFileName + "\"");
     try {
-      FileIO.toFile(String.format("%s%s%s.%s", cfgDir, File.separator, grammarFileName, "xml"), simplexml);
+      FileIO.toFile(String.format("%s%s%s.%s", FileIO.getCfgDir(), File.separator, grammarFileName, "xml"), simplexml);
       save("xml", simplexml);
 
       String gramdef = "#JSGF V1.0;\n" + "grammar " + grammarFileName + ";\n" + "public <greet> = (" + grammar + ");";
-      FileIO.toFile(String.format("%s%s%s.%s", cfgDir, File.separator, grammarFileName, "gram"), gramdef);
+      FileIO.toFile(String.format("%s%s%s.%s", FileIO.getCfgDir(), File.separator, grammarFileName, "gram"), gramdef);
     } catch (Exception e) {
       Logging.logError(e);
       return false;
@@ -510,8 +487,8 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
   /**
    * method to suppress recognition listening events This is important when
-   * Sphinx is listening --&gt; then Speaking, typically you don't want Sphinx to
-   * listen to its own speech, it causes a feedback loop and with Sphinx not
+   * Sphinx is listening --&gt; then Speaking, typically you don't want Sphinx
+   * to listen to its own speech, it causes a feedback loop and with Sphinx not
    * really very accurate, it leads to weirdness -- additionally it does not
    * recreate the speech processor - so its not as heavy handed
    */
@@ -599,19 +576,10 @@ public class Sphinx extends AbstractSpeechRecognizer {
     return clean;
   }
 
-  @Override
-  public void startRecording() {
+ 
+  public void startRecordingx() {
     microphone.clear();
     microphone.startRecording();
-  }
-
-  @Override
-  public void stopListening() {
-    isListening = false;
-    if (speechProcessor != null) {
-      speechProcessor.isRunning = false;
-    }
-    speechProcessor = null;
   }
 
   /**
@@ -620,9 +588,16 @@ public class Sphinx extends AbstractSpeechRecognizer {
    * stopping the recording, but by not processing what was recognized
    */
   @Override
-  public void stopMsgRecording() {
-    microphone.stopRecording();
-    microphone.clear();
+  public void stopListening() {
+    if (microphone != null) {
+      microphone.stopRecording();
+      microphone.clear();
+    }
+    isListening = false;
+    if (speechProcessor != null) {
+      speechProcessor.isRunning = false;
+    }
+    speechProcessor = null;
   }
 
   @Override
@@ -655,15 +630,6 @@ public class Sphinx extends AbstractSpeechRecognizer {
 
   }
 
-  @Override
-  public void onStartSpeaking(String utterance) {
-    pauseListening();
-  }
-
-  @Override
-  public void onEndSpeaking(String utterance) {
-    resumeListening();
-  }
 
   /**
    * This static method returns all the details of the class without it having
@@ -683,20 +649,16 @@ public class Sphinx extends AbstractSpeechRecognizer {
     // https://cmusphinx.github.io/wiki/tutorialsphinx4/
     // meta.addDependency("javax.speech.recognition", "1.0");
     // meta.addDependency("edu.cmu.sphinx", "4-1.0beta6");
-    meta.addDependency("edu.cmu.sphinx", "sphinx4-core", "5prealpha-SNAPSHOT");    
+    meta.addDependency("edu.cmu.sphinx", "sphinx4-core", "5prealpha-SNAPSHOT");
     meta.addDependency("edu.cmu.sphinx", "sphinx4-data", "5prealpha-SNAPSHOT");
     return meta;
   }
 
   @Override
-  public void setAutoListen(boolean autoListen) {
-    // TODO Auto-generated method stub
-    
+  public Map<String, Locale> getLocales() {
+    return Locale.getLocaleMap("en-US");
   }
 
-  @Override
-  public boolean isListening() {
-    // TODO Auto-generated method stub
-    return false;
-  }
+  
+
 }

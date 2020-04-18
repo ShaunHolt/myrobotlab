@@ -5,7 +5,7 @@
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -29,7 +29,9 @@ import java.io.Serializable;
 
 import org.myrobotlab.codec.CodecUtils;
 import org.myrobotlab.logging.Level;
+import org.myrobotlab.logging.LoggerFactory;
 import org.myrobotlab.logging.LoggingFactory;
+import org.slf4j.Logger;
 
 /**
  * A generalized Pin
@@ -41,6 +43,8 @@ import org.myrobotlab.logging.LoggingFactory;
  *
  */
 public class Pin implements Serializable {
+  public final static Logger log = LoggerFactory.getLogger(Pin.class);
+  
   private static final long serialVersionUID = 1L;
 
   public static final int DIGITAL_VALUE = 1; // normalized with data coming
@@ -91,9 +95,9 @@ public class Pin implements Serializable {
       pin.pin = 5;
       pin.source = "here";
       pin.value = 1;
-      System.out.print(pin);
+      log.info("Pin:", pin);
     } catch (Exception e) {
-      System.out.print(e.getMessage());
+      log.info(e.getMessage());
     }
   }
 

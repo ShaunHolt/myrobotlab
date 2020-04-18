@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -70,11 +70,11 @@ public class SwingOutMethodDialog extends JDialog implements ActionListener {
             MethodData md = data.get(index);
             Class c = Class.forName(String.format("org.myrobotlab.service.%s", md.canonicalName));
             Method m = null;
-            if (md.methodEntry.parameterTypes == null) {
+            if (md.methodEntry.getParameterTypes() == null) {
               log.info("paramterType is null");
               m = c.getMethod(md.methodEntry.getName());
             } else {
-              m = c.getMethod(md.methodEntry.getName(), md.methodEntry.parameterTypes);
+              m = c.getMethod(md.methodEntry.getName(), md.methodEntry.getParameterTypes());
             }
             ToolTip anno = m.getAnnotation(ToolTip.class);
             if (anno != null) {
@@ -182,10 +182,10 @@ public class SwingOutMethodDialog extends JDialog implements ActionListener {
   }
 
   public String formatOutMethod(MethodEntry me) {
-    if (me.returnType == null || me.returnType == void.class) {
+    if (me.getReturnType() == null || me.getReturnType() == void.class) {
       return me.getName();
     } else {
-      String p = me.returnType.getCanonicalName();
+      String p = me.getReturnType().getCanonicalName();
       String t[] = p.split("\\.");
       return (me.getName() + " -> " + t[t.length - 1]);
     }

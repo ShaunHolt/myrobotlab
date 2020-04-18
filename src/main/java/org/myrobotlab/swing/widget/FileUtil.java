@@ -67,7 +67,7 @@ public class FileUtil {
     return null;
   }
 
-  static public boolean save(JFrame frame, String data, String filename) {
+  static public String save(JFrame frame, String data, String filename) {
 
     if (filename == null || !(new File(filename).exists())) {
       return saveAs(frame, data, filename);
@@ -75,8 +75,9 @@ public class FileUtil {
       return writeFile(data, filename);
     }
   }
-
-  static public boolean saveAs(JFrame frame, String data, String filename) {
+  
+  
+  static public String saveAsFileName(JFrame frame, String filename) {
     FileDialog fd = new FileDialog(frame, "Save File", FileDialog.SAVE);
     fd.setFile(filename);
     fd.setVisible(true);
@@ -86,7 +87,23 @@ public class FileUtil {
       // file
     } else {
       setLastStatus("canceled file save");
-      return false;
+      return null;
+    }
+    return filename;
+  }
+
+
+  static public String saveAs(JFrame frame, String data, String filename) {
+    FileDialog fd = new FileDialog(frame, "Save File", FileDialog.SAVE);
+    fd.setFile(filename);
+    fd.setVisible(true);
+    String selectedFilename = fd.getFile();
+    if (selectedFilename != null) {
+      filename = fd.getDirectory() + selectedFilename; // new selected
+      // file
+    } else {
+      setLastStatus("canceled file save");
+      return filename;
     }
     return writeFile(data, filename);
   }
@@ -103,7 +120,7 @@ public class FileUtil {
     FileUtil.lastStatus = lastStatus;
   }
 
-  static public boolean writeFile(String data, String filename) {
+  static public String writeFile(String data, String filename) {
     File f = new File(filename);
     try {
       FileWriter fw = new FileWriter(f);
@@ -113,9 +130,9 @@ public class FileUtil {
       lastFileSaved = filename;
     } catch (IOException exc) {
       setLastStatus("IOException: " + filename);
-      return false;
+      return null;
     }
 
-    return true;
+    return filename;
   }
 }

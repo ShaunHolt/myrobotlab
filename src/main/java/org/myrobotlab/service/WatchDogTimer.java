@@ -1,9 +1,11 @@
 package org.myrobotlab.service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import org.myrobotlab.codec.CodecJson;
+import org.myrobotlab.codec.CodecUtils;
 import org.myrobotlab.framework.Message;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
@@ -14,6 +16,8 @@ import org.myrobotlab.logging.LoggingFactory;
 import org.slf4j.Logger;
 
 public class WatchDogTimer extends Service {
+
+  List<Message> globalActions = new ArrayList<Message>();
 
   /**
    * the timer class is a named watchdog timer which will look for resets at a
@@ -33,16 +37,18 @@ public class WatchDogTimer extends Service {
     Long lastCheckPointTs;
 
     Status alert;
-    Message correctiveAction;
+    // Message correctiveAction;
+    List<Message> actions = new ArrayList<Message>();
 
     /**
-     * the default intereval which checkpoints are sent to the watchdog must be <
-     * defaultIntervalMs
+     * the default intereval which checkpoints are sent to the watchdog must be
+     * < defaultIntervalMs
      */
     int sleepIntervalMs = 200;
+    private boolean autoDeactivate = false;    
 
     public String toString() {
-      return CodecJson.encode(this);
+      return CodecUtils.toJson(this);
     }
 
     public Timer(WatchDogTimer parent, String checkPointName, String serviceName, String method, Object... data) {
@@ -51,15 +57,15 @@ public class WatchDogTimer extends Service {
       // this.futureTimeToAlertTs = futureTimeToAlertTs; this only gets set when
       // checkpoint is activated
       if (serviceName != null && method != null) {
-        this.correctiveAction = Message.createMessage(getName(), serviceName, method, data);
+        this.actions.add(Message.createMessage(getName(), serviceName, method, data));
       }
     }
 
     public void reset() {
-      this.lastCheckPointTs = this.futureTimeToAlertTs;      
+      this.lastCheckPointTs = this.futureTimeToAlertTs;
       long currentTs = System.currentTimeMillis();
-      this.futureTimeToAlertTs = currentTs + interval; 
-      log.debug(String.format("reset checkpoint %s.%s to +%d ms %d ms remaining", getName(), name, interval, lastCheckPointTs - currentTs));
+      this.futureTimeToAlertTs = currentTs + interval;
+      log.debug("reset checkpoint {}.{} to +{} ms {} ms remaining", getName(), name, interval, lastCheckPointTs - currentTs);
     }
 
     @Override
@@ -75,34 +81,51 @@ public class WatchDogTimer extends Service {
             parent.invoke("publishAlert", this);
 
             // see if we should additionally fire a message
-            if (correctiveAction != null) {
-              parent.send(correctiveAction);
+            for (Message action : actions) {
+              log.info("watchdog {} apply corrective action {}", parent.getName(), action);
+              action.historyList.clear();
+              action.msgId = System.currentTimeMillis();
+              parent.send(action);
             }
+
+            for (Message globalAction : globalActions) {
+              log.info("watchdog {} apply corrective global action {}", parent.getName(), globalAction);
+              globalAction.historyList.clear();
+              globalAction.msgId = System.currentTimeMillis();
+              parent.send(globalAction);
+            }
+
             // de-activate the alert
-            activate(false);
+            if (autoDeactivate) {
+              activate();
+            }
           }
           sleep(sleepIntervalMs);
         }
       } catch (Exception e2) {
         log.error("watchdog threw", e2);
-        activate(false);
+        deactivate();
       }
     }
 
-    public void activate(boolean b) {
-      if (b) {
-        if (myThread == null) {
-          info("activating %s watchdog timer", name);
-          futureTimeToAlertTs = System.currentTimeMillis() + interval;
-          active = true;
-          myThread = new Thread(this, String.format("%s.watchdog", name));
-          myThread.start();
-        }
-      } else {
-        if (myThread != null) {
-          active = false;
-          myThread = null;
-        }
+    public void autoDeactivate(boolean b) {
+      autoDeactivate = b;
+    }
+
+    public void activate() {
+      if (myThread == null) {
+        info("activating %s watchdog timer", name);
+        futureTimeToAlertTs = System.currentTimeMillis() + interval;
+        active = true;
+        myThread = new Thread(this, String.format("%s.timer.%s", parent.getName(), name));
+        myThread.start();
+      }
+    }
+
+    public void deactivate() {
+      if (myThread != null) {
+        active = false;
+        myThread = null;
       }
     }
   }
@@ -129,13 +152,13 @@ public class WatchDogTimer extends Service {
     boolean active = false;
 
     public String toString() {
-      return CodecJson.encode(this);
+      return CodecUtils.toJson(this);
     }
 
     public CheckPointWorker(WatchDogTimer parent, Integer checkPointIntervalMs, String watchDogTimerName, String checkPointName) {
 
       this.parent = parent;
-      if (checkPointIntervalMs != null){
+      if (checkPointIntervalMs != null) {
         this.checkPointIntervalMs = checkPointIntervalMs;
       }
       this.watchDogTimerName = watchDogTimerName;
@@ -158,7 +181,7 @@ public class WatchDogTimer extends Service {
     public void activate(boolean b) {
       if (b) {
         if (myThread == null) {
-          log.info("activating %s checkpoint worker", checkPointIntervalMs);
+          log.info("activating {} checkpoint worker", checkPointIntervalMs);
           active = true;
           myThread = new Thread(this, String.format("%s.%s.checkpoint", watchDogTimerName, checkPointName));
           myThread.start();
@@ -188,9 +211,12 @@ public class WatchDogTimer extends Service {
    */
   int defaultIntervalMs = 2000;
 
+  public WatchDogTimer(String n, String id) {
+    super(n, id);
+  }
 
-  public WatchDogTimer(String n) {
-    super(n);
+  public Timer addTimer() {
+    return addTimer(getName());
   }
 
   public Timer addTimer(String checkPointName) {
@@ -215,10 +241,14 @@ public class WatchDogTimer extends Service {
     return timer;
   }
 
+  public Timer activateTimer() {
+    return activateTimer(getName());
+  }
+
   public Timer activateTimer(String checkPointName) {
     if (timers.containsKey(checkPointName)) {
       Timer timer = timers.get(checkPointName);
-      timer.activate(true);
+      timer.activate();
       return timer;
     }
     error("cannot activate timer %s - not found", checkPointName);
@@ -226,12 +256,17 @@ public class WatchDogTimer extends Service {
   }
 
   /**
+   * default checkpoint sent
+   */
+  public void checkPoint() {
+    checkPoint(getName(), getName());
+  }
+
+  /**
    * default method to "check-in" - a service calls this function to say
    * "everything is ok"
    * 
-   * @watchDogName
-   * 
-   * @return
+   * @param watchDogTimerName - name of timer
    */
   public void checkPoint(String watchDogTimerName) {
     checkPoint(watchDogTimerName, getName());
@@ -242,7 +277,6 @@ public class WatchDogTimer extends Service {
    * "everything is ok"
    * 
    * @param checkPointName
-   * @return
    */
 
   public void checkPoint(String watchDogTimerName, String checkPointName) {
@@ -254,9 +288,8 @@ public class WatchDogTimer extends Service {
    * "everything is ok" the next time it will "check-in" is in future
    * milliseconds
    * 
-   * @param timerName
-   * @param future
-   * @return
+   * @param timerName - name of timer
+   * @return - the timer
    */
   public Timer onCheckPoint(String timerName) {
 
@@ -284,14 +317,23 @@ public class WatchDogTimer extends Service {
     return alert;
   }
 
-
   public void stop() {
-    for (Timer timer: timers.values()){
-      timer.activate(false);
+    for (Timer timer : timers.values()) {
+      timer.deactivate();
     }
-    
-    for (CheckPointWorker worker : checkpoints.values()){
+
+    for (CheckPointWorker worker : checkpoints.values()) {
       worker.activate(false);
+    }
+  }
+
+  public void start() {
+    for (Timer timer : timers.values()) {
+      timer.activate();
+    }
+
+    for (CheckPointWorker worker : checkpoints.values()) {
+      worker.activate(true);
     }
   }
 
@@ -320,57 +362,123 @@ public class WatchDogTimer extends Service {
     return meta;
   }
 
-  public static void main(String[] args) {
-    try {
-
-      LoggingFactory.init(Level.INFO);
-
-      // create services
-      Mqtt mqtt02 = (Mqtt) Runtime.start("mqtt02", "Mqtt");
-      WatchDogTimer watchdog = (WatchDogTimer) Runtime.start("watchdog", "WatchDogTimer");
-      WatchDogTimer joystickCheck = (WatchDogTimer) Runtime.start("joystickCheck", "WatchDogTimer");
-      // WatchDogTimer motorCheck = (WatchDogTimer) Runtime.start("motorCheck",
-      // "WatchDogTimer");
-
-      mqtt02.connect("tcp://iot.eclipse.org:1883");
-      mqtt02.subscribe("mrl/broadcast/#");
-      Message msg = Message.createMessage(mqtt02.getName(), "runtime", "hello", new Object[]{Runtime.getPlatform()});
-      mqtt02.publish("mrl/broadcast", 1, CodecJson.encode(msg).getBytes());
-
-      // configuration
-      // adding and activating a checkpoint
-      watchdog.addTimer("joystickCheck");
-      // watchdog.activateTimer("motorCheck");
-      
-      // or "auto" mode can be set
-      joystickCheck.addCheckPoint("watchdog");
-
-      // 2 second default - under two seconds is ok
-      for (int i = 0; i < 100; ++i) {
-        // "manual" checkpoints can be sent by specifying
-        // the name of the timer...
-        joystickCheck.checkPoint("watchdog");
-        // motorCheck.checkPoint("watchdog");
-        sleep(100);
-      }
-
-      
-
-    } catch (Exception e) {
-      log.error("main threw", e);
-    }
-  }
-
-  
   public void addCheckPoint(String watchDogName) {
     CheckPointWorker cpw = null;
-    if (checkpoints.containsKey(watchDogName)){
+    if (checkpoints.containsKey(watchDogName)) {
       cpw = checkpoints.get(watchDogName);
     } else {
       cpw = new CheckPointWorker(this, null, watchDogName, getName());
     }
     cpw.activate(true);
   }
-  
+
+  public void addAction(String service, String method, Object... params) {
+    // if action is not assigned to a specific timer
+    // add the action to "all"
+    addGlobalAction(service, method, params);
+    // addActionToTimer(getName(), service, method, params);
+  }
+
+  private void addGlobalAction(String service, String method, Object... params) {
+    globalActions.add(Message.createMessage(getName(), service, method, params));
+  }
+
+  public void addActionToTimer(String timerName, String service, String method, Object... params) {
+    Timer t = null;
+    if (!timers.containsKey(timerName)) {
+      t = addTimer(timerName);
+    } else {
+      t = timers.get(timerName);
+    }
+    t.actions.add(Message.createMessage(getName(), service, method, params));
+  }
+
+  public static void main(String[] args) {
+    try {
+
+      LoggingFactory.init(Level.INFO);
+
+      {
+        // most basic use case
+        // single watchdog timer provides its own checkpoint
+        // FIXME - junit which verifies checkpoint suppression is working
+
+        Runtime.start("log", "Log");
+        WatchDogTimer watchdog = (WatchDogTimer) Runtime.start("watchdog", "WatchDogTimer");
+        watchdog.addTimer();
+        watchdog.addAction("log", "info", "corrective action applied");
+
+        for (int i = 0; i < 100; ++i) {
+          watchdog.checkPoint();
+        }
+
+      }
+
+      {
+        // ============ wall-e raspi - watchdog e-power services ============
+
+        // Mqtt mqtt01 = (Mqtt) Runtime.start("mqtt01", "Mqtt");
+        WatchDogTimer watchdog = (WatchDogTimer) Runtime.start("watchdog", "WatchDogTimer");
+
+        Motor m1 = (Motor) Runtime.start("m1", "Motor");
+
+        // configuration
+        // adding and activating a checkpoint
+        // FIXME - junit "named" watchdogtimer
+        watchdog.addTimer("joystickCheck"); // <-- response action
+        // watchdog.addTimer("joystickCheck",
+        // "serial01", "r1", 1);
+
+        watchdog.addTimer("raspiCheck"); // <-- response action
+        // watchdog.addTimer("joystickCheck",
+        // "serial01", "r1", 1);
+        watchdog.addAction("m1", "stop");
+        // FIXME - activateAfterFirstCheckPoint
+        // FIXME - reset
+        // FIXME - action reset -> power stop & lock ?
+        // mqtt01.connect("tcp://iot.eclipse.org:1883");
+        // mqtt01.subscribe("mrl/broadcast/#");
+      }
+      {
+        // ============ wall-e laptop - motor control services ============
+        // Mqtt mqtt02 = (Mqtt) Runtime.start("mqtt02", "Mqtt");
+        // mqtt02.connect("tcp://iot.eclipse.org:1883");
+        // mqtt02.subscribe("mrl/broadcast/#");
+        // Message msg = Message.createMessage(mqtt02.getName(), "runtime",
+        // "hello", new Object[] { Runtime.getPlatform() });
+        // FIXME - doesn't say "who" - should conform to gateway semantics
+        // mqtt02.publish("mrl/broadcast/gateway01/runtime", 1,
+        // CodecJson.encode(msg).getBytes());
+      }
+      {
+        // ============ remote joystick ============
+        // Mqtt mqtt03 = (Mqtt) Runtime.start("mqtt03", "Mqtt");
+        // mqtt03.connect("tcp://iot.eclipse.org:1883");
+        // mqtt03.subscribe("mrl/broadcast/#");
+        WatchDogTimer joystickCheck = (WatchDogTimer) Runtime.start("joystickCheck", "WatchDogTimer");
+        WatchDogTimer raspiCheck = (WatchDogTimer) Runtime.start("raspiCheck", "WatchDogTimer");
+
+        // watchdog.activateTimer("motorCheck");
+
+        // or "auto" mode can be set
+        joystickCheck.addCheckPoint("watchdog");
+        raspiCheck.addCheckPoint("watchdog");
+
+        // FIXME - attach ? what to what - dual timer / echo ?
+
+        // 2 second default - under two seconds is ok
+        // not needed - have "auto" now
+        /*
+         * for (int i = 0; i < 100; ++i) { // "manual" checkpoints can be sent
+         * by specifying // the name of the timer...
+         * joystickCheck.checkPoint("watchdog"); //
+         * motorCheck.checkPoint("watchdog"); sleep(100); }
+         */
+      }
+
+    } catch (Exception e) {
+      log.error("main threw", e);
+    }
+  }
 
 }

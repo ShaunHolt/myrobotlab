@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import org.myrobotlab.service.Runtime;
 
 import org.myrobotlab.framework.QueueStats;
 import org.myrobotlab.service.Serial;
@@ -101,7 +102,7 @@ public class RoombaCommPort extends RoombaComm implements SerialDataListener {
   // constructor
   public RoombaCommPort() {
     super();
-    serial = new Serial("serial");
+    serial = (Serial)Runtime.start("serial", "Serial");
     serial.startService();
     makePorts();
   }
@@ -122,7 +123,6 @@ public class RoombaCommPort extends RoombaComm implements SerialDataListener {
     computeSafetyFault();
   }
 
-  
   public boolean connect(String portid) {
     logmsg("connecting to port '" + portid + "'");
     portname = portid;
@@ -133,10 +133,10 @@ public class RoombaCommPort extends RoombaComm implements SerialDataListener {
     }
 
     try {
-    openPort();
-    } catch(Exception e){
-    	log.error("cannot connect", e);
-    	return false;
+      openPort();
+    } catch (Exception e) {
+      log.error("cannot connect", e);
+      return false;
     }
 
     if (connected) {
@@ -241,10 +241,11 @@ public class RoombaCommPort extends RoombaComm implements SerialDataListener {
   /**
    * internal method, used by connect() FIXME: make it faile more gracefully,
    * recognize bad port
- * @throws IOException 
+   * 
+   * @throws IOException
    */
   private void openPort() throws IOException {
-	  serial.open(portname, rate, databits, stopbits, parity);
+    serial.open(portname, rate, databits, stopbits, parity);
   }
 
   /*
@@ -367,12 +368,12 @@ public class RoombaCommPort extends RoombaComm implements SerialDataListener {
 
   @Override
   public void onConnect(String portName) {
-    log.info(String.format("%s connected to %s", getName(), portName));
+    log.info("{} connected to {}", getName(), portName);
   }
 
   @Override
   public void onDisconnect(String portName) {
-    log.info(String.format("%s disconnected from %s", getName(), portName));
+    log.info("{} disconnected from {}", getName(), portName);
   }
 
   @Override

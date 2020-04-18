@@ -1,11 +1,11 @@
 /**
  *                    
- * @author greg (at) myrobotlab.org
+ * @author grog (at) myrobotlab.org
  *  
  * This file is part of MyRobotLab (http://myrobotlab.org).
  *
  * MyRobotLab is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the Apache License 2.0 as published by
  * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version (subject to the "Classpath" exception
  * as provided in the LICENSE.txt file that accompanied this code).
@@ -13,7 +13,7 @@
  * MyRobotLab is distributed in the hope that it will be useful or fun,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Apache License 2.0 for more details.
  *
  * All libraries in thirdParty bundle are subject to their own license
  * requirements - please refer to http://myrobotlab.org/libraries for 
@@ -51,7 +51,7 @@ public class PhotoReelWidget extends ServiceGui {
       Object[] d = new Object[2];
       d[0] = e.getX();
       d[0] = e.getY();
-      myService.send(boundServiceName, "invokeFilterMethod", boundFilterName, "samplePoint", d); // TODO
+      swingGui.send(boundServiceName, "invokeFilterMethod", boundFilterName, "samplePoint", d); // TODO
       // -
       // overload
       // and
@@ -103,8 +103,6 @@ public class PhotoReelWidget extends ServiceGui {
 
   public PhotoReelWidget(final String boundServiceName, final SwingGui myService) {
     super(boundServiceName, myService);
-    
-
 
     ImageIcon icon = Util.getResourceIcon("photoreel.1.png");
     if (icon != null) {
@@ -114,7 +112,7 @@ public class PhotoReelWidget extends ServiceGui {
     screen.addMouseListener(vml);
     myIcon.setImageObserver(screen); // WWOOAH - THIS MAY BE A BIG
     // OPTIMIZATION !
-    
+
     setTitle(boundServiceName + " " + boundFilterName + " photo reel widget");
     addLine(screen, mouseInfo, resolutionInfo, deltaTime);
   }
@@ -154,7 +152,7 @@ public class PhotoReelWidget extends ServiceGui {
     // resize gui if necessary
     if (lastImageWidth != img.getWidth()) {
       screen.invalidate();
-      myService.pack();
+      swingGui.pack();
       lastImageWidth = img.getWidth();
     }
 
@@ -193,7 +191,7 @@ public class PhotoReelWidget extends ServiceGui {
     // resize gui if necessary
     if (lastImageWidth != img.getImage().getWidth()) {
       screen.invalidate();
-      myService.pack();
+      swingGui.pack();
       lastImageWidth = img.getImage().getWidth();
       resolutionInfo.setText(" " + lastImageWidth + " x " + img.getImage().getHeight());
     }
